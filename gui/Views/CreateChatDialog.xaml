@@ -1,0 +1,34 @@
+﻿<Window x:Class="TreeChat.Views.CreateChatDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="新建对话"
+        Width="600"
+        Height="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+            <TextBlock Text="对话名称：" Margin="0,0,0,5"/>
+            <TextBox Text="{Binding TreeTitle, UpdateSourceTrigger=PropertyChanged}" 
+                     Height="30" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Margin="0,0,0,20">
+            <TextBlock Text="系统信息（可选）：" Margin="0,0,0,5"/>
+            <TextBox Text="{Binding SystemPrompt, UpdateSourceTrigger=PropertyChanged}"
+                     Height="80" TextWrapping="Wrap" AcceptsReturn="True" 
+                     VerticalScrollBarVisibility="Auto"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="取消" Width="80" Command="{Binding CancelCommand}" Margin="0,0,10,0"/>
+            <Button Content="确定" Width="80" Command="{Binding ConfirmCommand}" IsEnabled="{Binding IsValid}" IsDefault="True" Margin="0,0,10,0"/>
+        </StackPanel>
+    </Grid>
+</Window>

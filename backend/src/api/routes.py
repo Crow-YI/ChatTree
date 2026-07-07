@@ -1,0 +1,364 @@
+"""所有 API 路由。"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import signal
+from collections.abc import AsyncGenerator
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from starlette.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse
+
+from ..core.config import settings
+from ..core.errors import (
+    TreeChatError,
+    LLMError,
+    TreeNotFoundError,
+    NodeNotFoundError,
+)
+from ..services.tree_manager import TreeManager
+from ..services.llm_client import DeepSeekClient
+from ..services.file_service import FileService
+from .dependencies import get_tree_manager, get_llm_client, get_file_service
+from .schemas import (
+    CreateTreeRequest,
+    RenameTreeRequest,
+    TreeListResponse,
+    TreeSummary,
+    TreeDetailResponse,
+    TreeNodeData,
+    ChatRequest,
+    RenameNodeRequest,
+    ConfigData,
+    ErrorDetail,
+    SuccessResponse,
+    HealthResponse,
+    SerializeResponse,
+    DeserializeRequest,
+    _node_to_data,
+)
+
+router = APIRouter(prefix="/api/v1")
+
+
+# === Exception Handlers (registered in main.py) ===
+
+async def treechat_error_handler(request: Request, exc: TreeChatError) -> JSONResponse:
+    """统一错误响应格式。"""
+    status_code: int = 500
+    if isinstance(exc, TreeNotFoundError) or isinstance(exc, NodeNotFoundError):
+        status_code = 404
+    content = json.dumps({
+        "success": False,
+        "error": {
+            "key": type(exc).__name__,
+            "message": str(exc),
+            "detail": None,
+            "status_code": status_code,
+        },
+    })
+    return JSONResponse(content=content, status_code=status_code)
+
+
+async def llm_error_handler(request: Request, exc: LLMError) -> JSONResponse:
+    """LLM 错误响应格式。"""
+    content = json.dumps({
+        "success": False,
+        "error": {
+            "key": exc.key,
+            "message": exc.message,
+            "detail": exc.detail,
+            "status_code": exc.status_code,
+        },
+    })
+    return JSONResponse(content=content, status_code=exc.status_code or 500)
+
+
+async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """通用异常响应格式。"""
+    content = json.dumps({
+        "success": False,
+        "error": {
+            "key": "InternalError",
+            "message": "服务器内部错误。",
+            "detail": str(exc),
+            "status_code": 500,
+        },
+    })
+    return JSONResponse(content=content, status_code=500)
+
+
+# === Health ===
+
+@router.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    """健康检查端点。"""
+    return HealthResponse()
+
+
+# === Tree CRUD ===
+
+@router.post("/trees", response_model=TreeDetailResponse)
+async def create_tree(
+    req: CreateTreeRequest,
+    tm: TreeManager = Depends(get_tree_manager),
+) -> TreeDetailResponse:
+    """创建新的对话树。"""
+    tree = tm.create_tree(title=req.title, system_prompt=req.system_prompt)
+    return TreeDetailResponse(
+        tree_id=tree.tree_id,
+        title=tree.title,
+        created_at=tree.created_at,
+        root_node=_node_to_data(tree.root_node),
+    )
+
+
+@router.get("/trees", response_model=TreeListResponse)
+async def list_trees(
+    tm: TreeManager = Depends(get_tree_manager),
+) -> TreeListResponse:
+    """列出所有对话树。"""
+    trees = tm.list_trees()
+    return TreeListResponse(
+        trees=[
+            TreeSummary(
+                tree_id=t.tree_id,
+                title=t.title,
+                created_at=t.created_at,
+                node_count=t.node_count,
+            )
+            for t in trees
+        ]
+    )
+
+
+@router.get("/trees/{tree_id}", response_model=TreeDetailResponse)
+async def get_tree(
+    tree_id: str,
+    tm: TreeManager = Depends(get_tree_manager),
+) -> TreeDetailResponse:
+    """获取单个对话树详情。"""
+    tree = tm.get_tree(tree_id)
+    return TreeDetailResponse(
+        tree_id=tree.tree_id,
+        title=tree.title,
+        created_at=tree.created_at,
+        root_node=_node_to_data(tree.root_node),
+    )
+
+
+@router.delete("/trees/{tree_id}", response_model=SuccessResponse)
+async def delete_tree(
+    tree_id: str,
+    tm: TreeManager = Depends(get_tree_manager),
+) -> SuccessResponse:
+    """删除对话树。"""
+    tm.delete_tree(tree_id)
+    return SuccessResponse()
+
+
+@router.put("/trees/{tree_id}", response_model=SuccessResponse)
+async def rename_tree(
+    tree_id: str,
+    req: RenameTreeRequest,
+    tm: TreeManager = Depends(get_tree_manager),
+) -> SuccessResponse:
+    """重命名对话树。"""
+    tm.rename_tree(tree_id, req.title)
+    return SuccessResponse()
+
+
+# === Chat (流式核心接口) ===
+
+@router.post("/trees/{tree_id}/chat")
+async def chat(
+    tree_id: str,
+    req: ChatRequest,
+    tm: TreeManager = Depends(get_tree_manager),
+    llm: DeepSeekClient = Depends(get_llm_client),
+) -> EventSourceResponse:
+    """SSE 流式聊天端点。"""
+    # 1. 在指定父节点下创建子节点
+    try:
+        child_node, parent_node = tm.add_child_node(tree_id, req.parent_node_id, req.message)
+    except (TreeNotFoundError, NodeNotFoundError) as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    # 2. 构建完整上下文
+    context_messages: list[dict[str, str]] = [
+        msg.to_api_dict() for msg in child_node.get_full_context()
+    ]
+
+    # 3. SSE 事件生成器
+    async def event_generator() -> AsyncGenerator[dict[str, str], None]:
+        try:
+            # 先发送 created 事件通知 WPF 新节点已创建
+            created_data = json.dumps({
+                "node_id": child_node.node_id,
+                "user_message": {
+                    "role": child_node.user_message.role,
+                    "content": child_node.user_message.content,
+                },
+            }, ensure_ascii=False)
+            yield {"event": "created", "data": created_data}
+
+            # 流式调用 DeepSeek
+            full_content: str = ""
+            async for token in llm.chat_stream(
+                messages=context_messages,
+                model=req.model,
+                temperature=req.temperature,
+                top_p=req.top_p,
+                top_k=req.top_k,
+                max_tokens=req.max_tokens,
+            ):
+                full_content += token
+                delta_data = json.dumps({"content": token}, ensure_ascii=False)
+                yield {"event": "delta", "data": delta_data}
+
+            # 保存 AI 回复到节点
+            tm.set_ai_reply(tree_id, child_node.node_id, full_content)
+
+            # 发送 done 事件
+            done_data = json.dumps({
+                "node_id": child_node.node_id,
+                "reply_message": {
+                    "role": "assistant",
+                    "content": full_content,
+                },
+            }, ensure_ascii=False)
+            yield {"event": "done", "data": done_data}
+
+        except LLMError as e:
+            # AI 调用失败 → 清理节点
+            try:
+                tm.delete_node(tree_id, child_node.node_id)
+            except Exception:
+                pass
+            error_data = json.dumps({
+                "key": e.key,
+                "message": e.message,
+                "detail": e.detail,
+                "status_code": e.status_code,
+            }, ensure_ascii=False)
+            yield {"event": "error", "data": error_data}
+
+        except Exception as e:
+            # 未知错误 → 清理节点
+            try:
+                tm.delete_node(tree_id, child_node.node_id)
+            except Exception:
+                pass
+            error_data = json.dumps({
+                "key": "InternalError",
+                "message": "服务器内部错误。",
+                "detail": str(e),
+                "status_code": 500,
+            }, ensure_ascii=False)
+            yield {"event": "error", "data": error_data}
+
+    return EventSourceResponse(event_generator())
+
+
+# === Node Operations ===
+
+@router.put("/trees/{tree_id}/nodes/{node_id}", response_model=SuccessResponse)
+async def rename_node(
+    tree_id: str,
+    node_id: int,
+    req: RenameNodeRequest,
+    tm: TreeManager = Depends(get_tree_manager),
+) -> SuccessResponse:
+    """重命名树节点。"""
+    tm.rename_node(tree_id, node_id, req.name)
+    return SuccessResponse()
+
+
+@router.delete("/trees/{tree_id}/nodes/{node_id}", response_model=SuccessResponse)
+async def delete_node(
+    tree_id: str,
+    node_id: int,
+    tm: TreeManager = Depends(get_tree_manager),
+) -> SuccessResponse:
+    """删除树节点及其子树。"""
+    tm.delete_node(tree_id, node_id)
+    return SuccessResponse()
+
+
+# === Config ===
+
+@router.get("/config", response_model=ConfigData)
+async def get_config() -> ConfigData:
+    """获取当前运行时 LLM 配置。"""
+    return ConfigData(
+        model=settings.model,
+        temperature=settings.temperature,
+        top_p=settings.top_p,
+        top_k=settings.top_k,
+        max_tokens=settings.max_tokens,
+    )
+
+
+@router.put("/config", response_model=SuccessResponse)
+async def update_config(req: ConfigData) -> SuccessResponse:
+    """更新运行时 LLM 配置。"""
+    settings.model = req.model
+    settings.temperature = req.temperature
+    settings.top_p = req.top_p
+    settings.top_k = req.top_k
+    settings.max_tokens = req.max_tokens
+    return SuccessResponse()
+
+
+# === File Serialization ===
+
+@router.get("/trees/{tree_id}/serialize", response_model=SerializeResponse)
+async def serialize_tree(
+    tree_id: str,
+    tm: TreeManager = Depends(get_tree_manager),
+    fs: FileService = Depends(get_file_service),
+) -> SerializeResponse:
+    """将对话树序列化为 JSON 字符串。"""
+    tree = tm.get_tree(tree_id)
+    json_content: str = fs.serialize(tree)
+    return SerializeResponse(json_content=json_content)
+
+
+@router.post("/trees/deserialize", response_model=TreeDetailResponse)
+async def deserialize_tree(
+    req: DeserializeRequest,
+    tm: TreeManager = Depends(get_tree_manager),
+    fs: FileService = Depends(get_file_service),
+) -> TreeDetailResponse:
+    """从 JSON 字符串反序列化并导入对话树。"""
+    tree = fs.deserialize(req.json_content, title=req.title)
+    tm.add_tree(tree)
+    return TreeDetailResponse(
+        tree_id=tree.tree_id,
+        title=tree.title,
+        created_at=tree.created_at,
+        root_node=_node_to_data(tree.root_node),
+    )
+
+
+# === Shutdown ===
+
+@router.post("/shutdown", response_model=SuccessResponse)
+async def shutdown() -> SuccessResponse:
+    """优雅关闭服务器。WPF 退出时调用。"""
+    from ..services.llm_client import llm_client as client
+
+    # 关闭 HTTP 客户端
+    await client.close()
+
+    # 延迟关闭 uvicorn（给响应返回的时间）
+    async def _shutdown() -> None:
+        await asyncio.sleep(0.5)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    asyncio.create_task(_shutdown())
+    return SuccessResponse()
