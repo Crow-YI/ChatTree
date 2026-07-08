@@ -19,7 +19,7 @@ class TestTreeManager:
         assert tree.title == "Hello"
         assert tree.root_node is not None
         assert tree.root_node.node_id == 1
-        assert tree.root_node.user_message.role == "system"
+        assert tree.root_node.user_message.type == "system"
         assert tree.root_node.user_message.content == "Be helpful."
         assert tree.tree_id != ""
 
@@ -68,7 +68,7 @@ class TestNodeOperations:
         child, parent = tree_manager.add_child_node(tree.tree_id, 1, "Hello")
         assert child.node_id > 1
         assert child.user_message.content == "Hello"
-        assert child.user_message.role == "user"
+        assert child.user_message.type == "human"
         assert child in parent.children
 
     def test_get_full_context(self, tree_manager: TreeManager) -> None:
@@ -80,8 +80,8 @@ class TestNodeOperations:
         context = child.get_full_context()
         assert len(context) == 3  # system, user, assistant
 
-        roles = [m.role for m in context]
-        assert roles == ["system", "user", "assistant"]
+        types = [m.type for m in context]
+        assert types == ["system", "human", "ai"]
 
         contents = [m.content for m in context]
         assert contents == ["You are helpful.", "User Q", "AI Answer"]

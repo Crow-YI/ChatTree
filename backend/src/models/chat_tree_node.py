@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
-from .chat_message import ChatMessage
+from pydantic import BaseModel, ConfigDict
+
+from .chat_message import BaseMessage, AIMessage
 
 
 class ChatTreeNode(BaseModel):
-    """树节点，包含一条用户消息和可选的 AI 回复。"""
+    """树节点，包含一条用户消息和可选的 AI 回复。
+
+    使用 LangChain BaseMessage 子类型作为消息表示：
+    - user_message: SystemMessage（根节点）或 HumanMessage（子节点）
+    - reply_message: AIMessage（AI 回复）
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     node_id: int
-    user_message: ChatMessage
-    reply_message: ChatMessage | None = None
+    user_message: BaseMessage
+    reply_message: AIMessage | None = None
     name: str | None = None
     children: list[ChatTreeNode] = []
 
@@ -28,13 +34,13 @@ class ChatTreeNode(BaseModel):
     def parent(self) -> ChatTreeNode | None:
         return self._parent
 
-    def get_full_context(self) -> list[ChatMessage]:
+    def get_full_context(self) -> list[BaseMessage]:
         """收集从根节点到当前节点的完整上下文（按时间顺序排列）。
 
         递归向上遍历父节点，收集所有 user_message 和 reply_message，
         然后反转得到从 system prompt → ... → 当前用户消息的完整列表。
         """
-        messages: list[ChatMessage] = []
+        messages: list[BaseMessage] = []
         current: ChatTreeNode | None = self
 
         while current is not None:

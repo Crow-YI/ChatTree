@@ -20,3 +20,8 @@ build/
 # WPF build artifacts
 gui/bin/
 gui/obj/
+
+# 项目调整文档
+Structure.md
+Plan.md
+CommitInfo.md

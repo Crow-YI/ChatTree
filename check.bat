@@ -77,7 +77,7 @@ REM 4. 测试 Python 导入
 echo [4] 测试 Python 模块...
 if not "%UV_PATH%"=="" (
     cd /d "%~dp0backend"
-    "%UV_PATH%" run python -c "from src.main import app; print('    [OK] FastAPI app:', app.title)" 2>&1
+    .venv\Scripts\python.exe -c "from src.main import app; print('    [OK] FastAPI app:', app.title)" 2>&1
     cd /d "%~dp0"
 )
 

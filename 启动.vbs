@@ -46,7 +46,7 @@ End If
 
 If Not backendRunning Then
     ' Launch Python backend in minimized window
-    WshShell.Run "cmd /c cd /d """ & ScriptDir & "\backend"" && """ & uvPath & """ run uvicorn src.main:app --host 127.0.0.1 --port 8800", 7, False
+    WshShell.Run "cmd /c cd /d """ & ScriptDir & "\backend"" && .venv\Scripts\python.exe -m uvicorn src.main:app --host 127.0.0.1 --port 8800", 7, False
 
     ' Wait for backend to be ready (max 30 seconds)
     If Not http Is Nothing Then

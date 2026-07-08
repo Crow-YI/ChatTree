@@ -21,9 +21,10 @@ from ..core.errors import (
     NodeNotFoundError,
 )
 from ..services.tree_manager import TreeManager
-from ..services.llm_client import DeepSeekClient
+from ..services.llm_service import LLMService
 from ..services.file_service import FileService
-from .dependencies import get_tree_manager, get_llm_client, get_file_service
+from ..models.chat_message import BaseMessage, message_to_role
+from .dependencies import get_tree_manager, get_llm_service, get_file_service
 from .schemas import (
     CreateTreeRequest,
     RenameTreeRequest,
@@ -179,7 +180,7 @@ async def chat(
     tree_id: str,
     req: ChatRequest,
     tm: TreeManager = Depends(get_tree_manager),
-    llm: DeepSeekClient = Depends(get_llm_client),
+    llm: LLMService = Depends(get_llm_service),
 ) -> EventSourceResponse:
     """SSE 流式聊天端点。"""
     # 1. 在指定父节点下创建子节点
@@ -188,10 +189,8 @@ async def chat(
     except (TreeNotFoundError, NodeNotFoundError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    # 2. 构建完整上下文
-    context_messages: list[dict[str, str]] = [
-        msg.to_api_dict() for msg in child_node.get_full_context()
-    ]
+    # 2. 构建完整上下文（直接传 BaseMessage 给 LangChain）
+    context_messages: list[BaseMessage] = child_node.get_full_context()
 
     # 3. SSE 事件生成器
     async def event_generator() -> AsyncGenerator[dict[str, str], None]:
@@ -200,20 +199,19 @@ async def chat(
             created_data = json.dumps({
                 "node_id": child_node.node_id,
                 "user_message": {
-                    "role": child_node.user_message.role,
+                    "role": message_to_role(child_node.user_message),
                     "content": child_node.user_message.content,
                 },
             }, ensure_ascii=False)
             yield {"event": "created", "data": created_data}
 
-            # 流式调用 DeepSeek
+            # 流式调用 LLM（LangChain astream）
             full_content: str = ""
-            async for token in llm.chat_stream(
+            async for token in llm.astream(
                 messages=context_messages,
                 model=req.model,
                 temperature=req.temperature,
                 top_p=req.top_p,
-                top_k=req.top_k,
                 max_tokens=req.max_tokens,
             ):
                 full_content += token
@@ -350,10 +348,10 @@ async def deserialize_tree(
 @router.post("/shutdown", response_model=SuccessResponse)
 async def shutdown() -> SuccessResponse:
     """优雅关闭服务器。WPF 退出时调用。"""
-    from ..services.llm_client import llm_client as client
+    from ..services.llm_service import llm_service as llm
 
-    # 关闭 HTTP 客户端
-    await client.close()
+    # 关闭 LLM 客户端连接
+    await llm.close()
 
     # 延迟关闭 uvicorn（给响应返回的时间）
     async def _shutdown() -> None:

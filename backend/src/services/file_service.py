@@ -12,7 +12,7 @@ from typing import Any
 
 from ..models.chat_tree import ChatTree
 from ..models.chat_tree_node import ChatTreeNode
-from ..models.chat_message import ChatMessage
+from ..models.chat_message import AIMessage, message_to_role, message_from_role
 
 
 class FileService:
@@ -51,12 +51,12 @@ class FileService:
             "NodeId": node.node_id,
             "Name": node.name,
             "UserMessage": {
-                "Role": node.user_message.role,
+                "Role": message_to_role(node.user_message),
                 "Content": node.user_message.content,
             },
             "ReplyMessage": (
                 {
-                    "Role": node.reply_message.role,
+                    "Role": message_to_role(node.reply_message),
                     "Content": node.reply_message.content,
                 }
                 if node.reply_message
@@ -70,7 +70,7 @@ class FileService:
     ) -> ChatTreeNode:
         """递归反序列化单个节点。"""
         user_msg_data: dict[str, Any] = data.get("UserMessage", {})
-        user_message = ChatMessage(
+        user_message = message_from_role(
             role=user_msg_data.get("Role", "user"),
             content=user_msg_data.get("Content", ""),
         )
@@ -84,8 +84,7 @@ class FileService:
 
         reply_data: dict[str, Any] | None = data.get("ReplyMessage")
         if reply_data:
-            node.reply_message = ChatMessage(
-                role=reply_data.get("Role", "assistant"),
+            node.reply_message = AIMessage(
                 content=reply_data.get("Content", ""),
             )
 

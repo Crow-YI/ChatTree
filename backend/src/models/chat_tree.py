@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+
 from pydantic import BaseModel, Field
-from .chat_message import ChatMessage
+
+from .chat_message import SystemMessage
 from .chat_tree_node import ChatTreeNode
 
 
@@ -25,7 +27,7 @@ class ChatTree(BaseModel):
         final_prompt = system_prompt or "你是一个有帮助的AI助手。"
         root = ChatTreeNode(
             node_id=1,
-            user_message=ChatMessage(role="system", content=final_prompt),
+            user_message=SystemMessage(content=final_prompt),
         )
         return cls(title=title, root_node=root)
 

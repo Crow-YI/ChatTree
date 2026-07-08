@@ -37,7 +37,7 @@ if %ERRORLEVEL% EQU 0 (
 
 REM 2. 启动 Python 后端（隐藏窗口）
 echo    [..] 正在启动 Python 后端...
-start "TreeChat-Backend" /MIN cmd /c "cd /d %~dp0backend && "%UV_PATH%" run uvicorn src.main:app --host 127.0.0.1 --port 8800"
+start "TreeChat-Backend" /MIN cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn src.main:app --host 127.0.0.1 --port 8800"
 
 REM 3. 等待后端就绪（最多 20 秒）
 set /a RETRIES=0

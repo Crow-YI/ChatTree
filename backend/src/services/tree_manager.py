@@ -6,7 +6,7 @@ import threading
 
 from ..models.chat_tree import ChatTree
 from ..models.chat_tree_node import ChatTreeNode
-from ..models.chat_message import ChatMessage
+from ..models.chat_message import HumanMessage, AIMessage
 from ..core.errors import TreeNotFoundError, NodeNotFoundError
 
 
@@ -87,7 +87,7 @@ class TreeManager:
         new_id = self._node_id_gen.next()
         child = ChatTreeNode(
             node_id=new_id,
-            user_message=ChatMessage(role="user", content=message),
+            user_message=HumanMessage(content=message),
         )
         parent.add_child(child)
         return child, parent
@@ -110,7 +110,7 @@ class TreeManager:
 
     def set_ai_reply(self, tree_id: str, node_id: int, content: str) -> None:
         node = self.get_node(tree_id, node_id)
-        node.reply_message = ChatMessage(role="assistant", content=content)
+        node.reply_message = AIMessage(content=content)
 
     # === Serialization Support ===
 

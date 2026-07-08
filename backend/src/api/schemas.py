@@ -10,6 +10,11 @@ if TYPE_CHECKING:
     from ..models.chat_tree_node import ChatTreeNode
 
 
+# isort: off
+from ..models.chat_message import message_to_role  # noqa: E402
+# isort: on
+
+
 # === Tree ===
 
 class CreateTreeRequest(BaseModel):
@@ -122,12 +127,12 @@ def _node_to_data(node: ChatTreeNode) -> TreeNodeData:
         node_id=node.node_id,
         name=node.name,
         user_message=NodeMessage(
-            role=node.user_message.role,
+            role=message_to_role(node.user_message),
             content=node.user_message.content,
         ),
         reply_message=(
             NodeMessage(
-                role=node.reply_message.role,
+                role=message_to_role(node.reply_message),
                 content=node.reply_message.content,
             )
             if node.reply_message

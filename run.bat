@@ -30,7 +30,7 @@ echo   API Docs: http://127.0.0.1:8800/docs
 echo ========================================
 echo.
 cd /d "%~dp0backend"
-"%UV%" run uvicorn src.main:app --host 127.0.0.1 --port 8800 --log-level info
+.venv\Scripts\python.exe -m uvicorn src.main:app --host 127.0.0.1 --port 8800 --log-level info
 goto :end
 
 :gui
