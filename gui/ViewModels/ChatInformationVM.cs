@@ -12,6 +12,8 @@ namespace TreeChat.ViewModels
     {
         private string? _userMessage;
         private string? _aiReply;
+        private string? _systemPrompt;
+        private bool _isRootSelected;
 
         public string? UserMessage
         {
@@ -22,6 +24,30 @@ namespace TreeChat.ViewModels
         {
             get => _aiReply;
             set => SetProperty(ref _aiReply, value);
+        }
+
+        /// <summary>
+        /// 系统提示词（选中根节点时编辑）
+        /// </summary>
+        public string? SystemPrompt
+        {
+            get => _systemPrompt;
+            set
+            {
+                if (SetProperty(ref _systemPrompt, value) && CurrentChatTree != null)
+                {
+                    CurrentChatTree.SystemPrompt = value ?? "";
+                }
+            }
+        }
+
+        /// <summary>
+        /// 当前选中的节点是否为根节点
+        /// </summary>
+        public bool IsRootSelected
+        {
+            get => _isRootSelected;
+            set => SetProperty(ref _isRootSelected, value);
         }
 
         private string _inputMessage;
@@ -46,8 +72,22 @@ namespace TreeChat.ViewModels
                 _selectedNode = value;
                 if(value != null)
                 {
-                    UserMessage = value.Node.UserMessage;
-                    AIReply = value.Node.ReplyMessage;
+                    bool isRoot = value.Node.ParentNode == null;
+                    IsRootSelected = isRoot;
+
+                    if (isRoot)
+                    {
+                        // 根节点：显示系统信息编辑器
+                        SystemPrompt = CurrentChatTree?.SystemPrompt ?? "";
+                        UserMessage = null;
+                        AIReply = null;
+                    }
+                    else
+                    {
+                        // 非根节点：显示 Q&A
+                        UserMessage = value.Node.UserMessage;
+                        AIReply = value.Node.ReplyMessage;
+                    }
                 }
                 SendMessage.OnCanExecuteChanged();
             }
@@ -66,6 +106,7 @@ namespace TreeChat.ViewModels
         {
             UserMessage = string.Empty;
             AIReply = string.Empty;
+            SystemPrompt = string.Empty;
 
             SendMessage = new AsyncRelayCommand(
                 execute: ExecuteSendMessageAsync,
@@ -86,8 +127,9 @@ namespace TreeChat.ViewModels
 
             try
             {
-                // 乐观 UI 更新：先创建本地临时节点
-                ChatTreeNode newNode = new ChatTreeNode(SelectedNode.Node, InputMessage);
+                // 乐观 UI 更新：先创建本地临时节点（使用树内计数器获取 ID）
+                int newNodeId = CurrentChatTree.GetNextNodeId();
+                ChatTreeNode newNode = new ChatTreeNode(SelectedNode.Node, InputMessage, newNodeId);
                 newNodeVM = SelectedNode.AddChild(newNode);
                 ChatTreeChanged?.Invoke(SelectedNode, newNodeVM);
                 SelectedNode = newNodeVM;
@@ -102,7 +144,7 @@ namespace TreeChat.ViewModels
                 {
                     var treeResponse = await backend.CreateTreeAsync(
                         CurrentChatTree.TreeTitle,
-                        CurrentChatTree.RootNode.UserMessage);
+                        CurrentChatTree.SystemPrompt);
                     CurrentChatTree.TreeId = treeResponse.TreeId;
                 }
                 string treeId = CurrentChatTree.TreeId!;

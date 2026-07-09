@@ -28,7 +28,9 @@ class TestFileService:
         loaded: ChatTree = file_service.deserialize(json_str)
         assert loaded.title == "Test Tree"
         assert loaded.root_node.node_id == 1
-        assert loaded.root_node.user_message.content == "Be helpful."
+        assert loaded.root_node.user_message.content == ""
+        assert loaded.root_node.user_message.type == "human"
+        assert loaded.system_prompt == "Be helpful."
         assert len(loaded.root_node.children) == 2
 
     def test_deserialize_preserves_children(self) -> None:

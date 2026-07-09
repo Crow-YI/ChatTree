@@ -244,6 +244,7 @@ namespace TreeChat.ViewModels
             var tree = new ChatTree();
             tree.TreeId = response.TreeId;
             tree.TreeTitle = response.Title;
+            tree.SystemPrompt = response.SystemPrompt;
 
             if (response.RootNode != null)
             {

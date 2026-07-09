@@ -26,6 +26,7 @@ class FileService:
             "Version": self.CURRENT_VERSION,
             "TreeTitle": tree.title,
             "CreatedTime": tree.created_at,
+            "SystemPrompt": tree.system_prompt,
             "RootNode": self._serialize_node(tree.root_node),
         }
         return json.dumps(data, ensure_ascii=False, indent=2)
@@ -42,6 +43,7 @@ class FileService:
             title=title or data.get("TreeTitle", "已导入对话"),
             root_node=root_node,
             created_at=data.get("CreatedTime", datetime.now(timezone.utc).isoformat()),
+            system_prompt=data.get("SystemPrompt", ""),
         )
         return tree
 

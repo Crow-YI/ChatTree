@@ -2,32 +2,10 @@
 
 from __future__ import annotations
 
-import threading
-
 from ..models.chat_tree import ChatTree
 from ..models.chat_tree_node import ChatTreeNode
 from ..models.chat_message import HumanMessage, AIMessage
 from ..core.errors import TreeNotFoundError, NodeNotFoundError
-
-
-class _NextNodeId:
-    """线程安全的全局 NodeID 计数器。"""
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._counter = 2  # 从 2 开始，node_id=1 保留给根节点
-
-    def next(self) -> int:
-        with self._lock:
-            current = self._counter
-            self._counter += 1
-            return current
-
-    def ensure_at_least(self, value: int) -> None:
-        """确保计数器至少为指定值（用于加载文件后保持 ID 不冲突）。"""
-        with self._lock:
-            if self._counter <= value:
-                self._counter = value + 1
 
 
 class TreeManager:
@@ -35,7 +13,6 @@ class TreeManager:
 
     def __init__(self) -> None:
         self._trees: dict[str, ChatTree] = {}
-        self._node_id_gen = _NextNodeId()
 
     # === Tree CRUD ===
 
@@ -63,11 +40,11 @@ class TreeManager:
 
     def add_tree(self, tree: ChatTree) -> None:
         """直接添加一个已构造的树（用于文件反序列化后加入管理）。"""
-        # 确保 NodeID 不冲突
+        # 扫描所有节点，确保树内计数器不冲突
         all_nodes = tree.get_all_nodes()
         if all_nodes:
             max_id = max(n.node_id for n in all_nodes)
-            self._node_id_gen.ensure_at_least(max_id)
+            tree.reset_node_id_counter(max_id)
         self._trees[tree.tree_id] = tree
 
     # === Node Operations ===
@@ -84,7 +61,8 @@ class TreeManager:
     ) -> tuple[ChatTreeNode, ChatTreeNode]:
         """在指定父节点下创建子节点，返回 (新子节点, 父节点)。"""
         parent = self.get_node(tree_id, parent_node_id)
-        new_id = self._node_id_gen.next()
+        tree = self.get_tree(tree_id)
+        new_id = tree.get_next_node_id()
         child = ChatTreeNode(
             node_id=new_id,
             user_message=HumanMessage(content=message),
@@ -111,11 +89,6 @@ class TreeManager:
     def set_ai_reply(self, tree_id: str, node_id: int, content: str) -> None:
         node = self.get_node(tree_id, node_id)
         node.reply_message = AIMessage(content=content)
-
-    # === Serialization Support ===
-
-    def reset_node_id_counter(self, max_id: int) -> None:
-        self._node_id_gen.ensure_at_least(max_id)
 
 
 # 全局单例

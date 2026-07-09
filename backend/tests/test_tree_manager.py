@@ -14,14 +14,17 @@ class TestTreeManager:
     """对话树 CRUD 测试。"""
 
     def test_create_tree(self, tree_manager: TreeManager) -> None:
-        """创建树——验证标题、根节点、tree_id。"""
+        """创建树——验证标题、根节点、tree_id、系统提示。"""
         tree = tree_manager.create_tree(title="Hello", system_prompt="Be helpful.")
         assert tree.title == "Hello"
         assert tree.root_node is not None
         assert tree.root_node.node_id == 1
-        assert tree.root_node.user_message.type == "system"
-        assert tree.root_node.user_message.content == "Be helpful."
+        assert tree.root_node.user_message.type == "human"
+        assert tree.root_node.user_message.content == ""
+        assert tree.system_prompt == "Be helpful."
         assert tree.tree_id != ""
+        # 根节点固定为 1，计数器从 2 开始
+        assert tree.get_next_node_id() == 2
 
     def test_list_trees(self, tree_manager: TreeManager) -> None:
         """列出所有树。"""
@@ -72,22 +75,26 @@ class TestNodeOperations:
         assert child in parent.children
 
     def test_get_full_context(self, tree_manager: TreeManager) -> None:
-        """get_full_context 应返回 system → user → assistant 的完整消息链。"""
+        """get_full_context 返回 user → assistant 消息链（系统提示由 ChatTree 单独提供）。"""
         tree = tree_manager.create_tree(system_prompt="You are helpful.")
         child, _ = tree_manager.add_child_node(tree.tree_id, 1, "User Q")
         tree_manager.set_ai_reply(tree.tree_id, child.node_id, "AI Answer")
 
         context = child.get_full_context()
-        assert len(context) == 3  # system, user, assistant
+        # 系统提示不再在节点树中，context 仅含 user + assistant
+        assert len(context) == 2
 
         types = [m.type for m in context]
-        assert types == ["system", "human", "ai"]
+        assert types == ["human", "ai"]
 
         contents = [m.content for m in context]
-        assert contents == ["You are helpful.", "User Q", "AI Answer"]
+        assert contents == ["User Q", "AI Answer"]
+
+        # 系统提示在 ChatTree 层级
+        assert tree.system_prompt == "You are helpful."
 
     def test_branching_context(self, tree_manager: TreeManager) -> None:
-        """分支节点的上下文应互相隔离。"""
+        """分支节点的上下文应互相隔离（系统提示在 ChatTree 上单独管理）。"""
         tree = tree_manager.create_tree(system_prompt="SYS")
         # Node A under root
         node_a, _ = tree_manager.add_child_node(tree.tree_id, 1, "Question A")
@@ -99,10 +106,14 @@ class TestNodeOperations:
         ctx_a = node_a.get_full_context()
         ctx_b = node_b.get_full_context()
 
-        assert len(ctx_a) == 3  # SYS, Question A, Answer A
-        assert len(ctx_b) == 3  # SYS, Question B, Answer B
-        assert ctx_a[1].content == "Question A"
-        assert ctx_b[1].content == "Question B"
+        # 不含系统提示，仅含用户/AI 消息
+        assert len(ctx_a) == 2  # Question A, Answer A
+        assert len(ctx_b) == 2  # Question B, Answer B
+        assert ctx_a[0].content == "Question A"
+        assert ctx_b[0].content == "Question B"
+
+        # 系统提示在顶层
+        assert tree.system_prompt == "SYS"
 
     def test_rename_node(self, tree_manager: TreeManager) -> None:
         """重命名节点。"""

@@ -57,6 +57,7 @@ class TreeDetailResponse(BaseModel):
     tree_id: str
     title: str
     created_at: str
+    system_prompt: str = ""
     root_node: TreeNodeData
 
 

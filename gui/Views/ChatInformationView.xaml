@@ -1,10 +1,10 @@
-﻿<UserControl x:Class="TreeChat.Views.ChatInformationView"
+<UserControl x:Class="TreeChat.Views.ChatInformationView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:TreeChat.Views"
-             mc:Ignorable="d" 
+             mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
     <Grid Margin="0,8,8,8">
         <Grid.RowDefinitions>
@@ -12,21 +12,56 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- 消息展示区卡片 -->
-        <Border Grid.Row="0" Background="White" CornerRadius="8" Padding="12" 
+        <!-- 系统信息编辑面板（根节点选中时显示） -->
+        <Border Grid.Row="0" Background="White" CornerRadius="8" Padding="12"
                 BorderBrush="#E2E6EA" BorderThickness="1" Effect="{StaticResource CardShadow}">
-            <ScrollViewer x:Name="MessageScrollViewer" 
-                          VerticalScrollBarVisibility="Auto" 
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsRootSelected}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <TextBlock Text="系统信息" FontSize="12" Foreground="#6C7A8A" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding SystemPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             TextWrapping="Wrap" AcceptsReturn="True"
+                             MinHeight="150" VerticalScrollBarVisibility="Auto"
+                             FontSize="14" Foreground="#1F2A3A"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Q&A 展示面板（非根节点选中时显示） -->
+        <Border Grid.Row="0" Background="White" CornerRadius="8" Padding="12"
+                BorderBrush="#E2E6EA" BorderThickness="1" Effect="{StaticResource CardShadow}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Visible"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsRootSelected}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <ScrollViewer x:Name="MessageScrollViewer"
+                          VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
                     <StackPanel Margin="0,0,0,16">
                         <TextBlock Text="提问" FontSize="12" Foreground="#6C7A8A" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <TextBlock Text="{Binding UserMessage}" 
+                        <TextBlock Text="{Binding UserMessage}"
                                    TextWrapping="Wrap" FontSize="14" Foreground="#1F2A3A"/>
                     </StackPanel>
                     <StackPanel>
                         <TextBlock Text="回答" FontSize="12" Foreground="#6C7A8A" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <TextBlock Text="{Binding AIReply}" 
+                        <TextBlock Text="{Binding AIReply}"
                                    TextWrapping="Wrap" FontSize="14" Foreground="#1F2A3A"/>
                     </StackPanel>
                 </StackPanel>

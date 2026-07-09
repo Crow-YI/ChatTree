@@ -23,7 +23,12 @@ namespace TreeChat.Models
         public DateTime CreatedTime { get; set; } = DateTime.Now;
 
         /// <summary>
-        /// 根节点（包含系统提示）
+        /// 系统提示词
+        /// </summary>
+        public string SystemPrompt { get; set; } = "你是一个有帮助的AI助手。";
+
+        /// <summary>
+        /// 根节点
         /// </summary>
         public ChatTreeNodeData RootNode { get; set; } = new ChatTreeNodeData();
 
@@ -35,10 +40,10 @@ namespace TreeChat.Models
         /// <summary>
         /// 从ChatTree对象创建数据传输对象
         /// </summary>
-        /// <param name="chatTree">原始对话树对象</param>
         public ChatTreeData(ChatTree chatTree)
         {
             TreeTitle = chatTree.TreeTitle;
+            SystemPrompt = chatTree.SystemPrompt;
             RootNode = new ChatTreeNodeData(chatTree.RootNode);
         }
 
@@ -51,10 +56,11 @@ namespace TreeChat.Models
         {
             var chatTree = new ChatTree();
             chatTree.TreeTitle = TreeTitle;
-            
+            chatTree.SystemPrompt = SystemPrompt;
+
             var rootNode = RootNode.ToChatTreeNode(null, ref nextNodeId);
             chatTree.SetRootNode(rootNode);
-            
+
             return chatTree;
         }
 
@@ -66,10 +72,11 @@ namespace TreeChat.Models
         {
             var chatTree = new ChatTree();
             chatTree.TreeTitle = TreeTitle;
-            
+            chatTree.SystemPrompt = SystemPrompt;
+
             var rootNode = RootNode.ToChatTreeNode(null);
             chatTree.SetRootNode(rootNode);
-            
+
             return chatTree;
         }
     }

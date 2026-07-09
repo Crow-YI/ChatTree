@@ -11,7 +11,7 @@ class ChatTreeNode(BaseModel):
     """树节点，包含一条用户消息和可选的 AI 回复。
 
     使用 LangChain BaseMessage 子类型作为消息表示：
-    - user_message: SystemMessage（根节点）或 HumanMessage（子节点）
+    - user_message: HumanMessage（用户消息，根节点为空占位）
     - reply_message: AIMessage（AI 回复）
     """
 

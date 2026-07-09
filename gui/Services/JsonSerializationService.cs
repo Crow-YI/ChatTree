@@ -38,27 +38,44 @@ namespace TreeChat.Services
                     NullValueHandling = NullValueHandling.Ignore
                 };
                 var data = JsonConvert.DeserializeObject<ChatTreeData>(json, settings);
-                
+
                 if (data == null || data.RootNode == null)
                 {
                     return null;
                 }
 
-                // 获取当前的 nextNodeId
-                int originalNextId = ChatTreeNode.GetCurrentNextNodeId();
-                
-                // 从当前的 nextNodeId 开始重新编号
-                int nextNodeId = originalNextId;
-                var chatTree = data.ToChatTree(ref nextNodeId);
-                
-                // 更新 nextNodeId 为最后使用的 ID + 1
-                ChatTreeNode.ResetNextNodeId(nextNodeId);
-                
+                var chatTree = data.ToChatTree();
+
+                // 反序列化后扫描所有节点，确保树内计数器不冲突
+                int maxId = 0;
+                foreach (var node in GetAllNodes(chatTree.RootNode))
+                {
+                    if (node.NodeID > maxId)
+                        maxId = node.NodeID;
+                }
+                chatTree.ResetNextNodeId(maxId + 1);
+
                 return chatTree;
             }
             catch (Exception)
             {
                 return null;
+            }
+        }
+
+        private static List<ChatTreeNode> GetAllNodes(ChatTreeNode root)
+        {
+            var result = new List<ChatTreeNode>();
+            CollectNodes(root, result);
+            return result;
+        }
+
+        private static void CollectNodes(ChatTreeNode node, List<ChatTreeNode> result)
+        {
+            result.Add(node);
+            foreach (var child in node.ChildNodes)
+            {
+                CollectNodes(child, result);
             }
         }
     }

@@ -84,6 +84,9 @@ namespace TreeChat.Models
         [JsonPropertyName("created_at")]
         public string CreatedAt { get; set; } = string.Empty;
 
+        [JsonPropertyName("system_prompt")]
+        public string SystemPrompt { get; set; } = string.Empty;
+
         [JsonPropertyName("root_node")]
         public TreeNodeData? RootNode { get; set; }
     }

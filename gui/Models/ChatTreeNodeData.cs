@@ -50,7 +50,7 @@ namespace TreeChat.Models
         /// 转换为ChatTreeNode对象（使用指定的起始NodeID）
         /// </summary>
         /// <param name="parent">父节点（根节点为null）</param>
-        /// <param name="nextNodeId">下一个可用的NodeID</param>
+        /// <param name="nextNodeId">下一个可用的NodeID，传入后自增</param>
         /// <returns>ChatTreeNode对象</returns>
         public ChatTreeNode ToChatTreeNode(ChatTreeNode? parent, ref int nextNodeId)
         {
@@ -71,13 +71,13 @@ namespace TreeChat.Models
         }
 
         /// <summary>
-        /// 转换为ChatTreeNode对象（使用默认的_nextNodeID）
+        /// 转换为ChatTreeNode对象（使用数据中存储的NodeId）
         /// </summary>
         /// <param name="parent">父节点（根节点为null）</param>
         /// <returns>ChatTreeNode对象</returns>
         public ChatTreeNode ToChatTreeNode(ChatTreeNode? parent = null)
         {
-            var node = new ChatTreeNode(parent, UserMessage);
+            var node = new ChatTreeNode(parent, UserMessage, NodeId);
 
             if (ReplyMessage != null)
             {

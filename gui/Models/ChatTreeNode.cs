@@ -12,20 +12,8 @@ namespace TreeChat.Models
         public int NodeID { get; }
         public string? Name { get; set; }
 
-        private static int _nextNodeID = 1;
-
         /// <summary>
-        /// 用于创建新节点的构造函数，自动分配 NodeID
-        /// </summary>
-        public ChatTreeNode(ChatTreeNode? parentNode, string userMessage)
-        {
-            ParentNode = parentNode;
-            UserMessage = userMessage;
-            NodeID = _nextNodeID++;
-        }
-
-        /// <summary>
-        /// 用于从文件加载节点的构造函数，使用指定的 NodeID（不递增 _nextNodeID）
+        /// 用于创建节点的构造函数，需传入明确 NodeID（不再使用全局 static 计数器）
         /// </summary>
         public ChatTreeNode(ChatTreeNode? parentNode, string userMessage, int nodeId)
         {
@@ -35,27 +23,23 @@ namespace TreeChat.Models
         }
 
         /// <summary>
-        /// 重置 _nextNodeID 到指定值（用于从文件加载后）
+        /// 此构造函数已废弃——调用方必须提供明确的 NodeID。
+        /// 请使用三参构造函数 ChatTreeNode(parentNode, userMessage, nodeId)。
+        /// 该构造函数保留仅为编译兼容，调用将抛出异常。
         /// </summary>
-        public static void ResetNextNodeId(int value)
+        [Obsolete("请使用 ChatTreeNode(parentNode, userMessage, nodeId) 并传入明确的 NodeID", true)]
+        public ChatTreeNode(ChatTreeNode? parentNode, string userMessage) : this(parentNode, userMessage, 0)
         {
-            _nextNodeID = value;
-        }
-
-        /// <summary>
-        /// 获取当前的 nextNodeID
-        /// </summary>
-        public static int GetCurrentNextNodeId()
-        {
-            return _nextNodeID;
+            throw new InvalidOperationException(
+                "不再支持无 NodeID 的构造函数。请通过 ChatTree.GetNextNodeId() 获取 ID。");
         }
 
         /// <summary>
         /// 添加一个新的子节点，包含用户消息，并返回新创建的子节点
         /// </summary>
-        public ChatTreeNode AddChildNode(string userMessage)
+        public ChatTreeNode AddChildNode(string userMessage, int nodeId)
         {
-            var childNode = new ChatTreeNode(this, userMessage);
+            var childNode = new ChatTreeNode(this, userMessage, nodeId);
             ChildNodes.Add(childNode);
             return childNode;
         }

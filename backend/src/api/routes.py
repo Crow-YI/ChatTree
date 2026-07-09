@@ -23,7 +23,7 @@ from ..core.errors import (
 from ..services.tree_manager import TreeManager
 from ..services.llm_service import LLMService
 from ..services.file_service import FileService
-from ..models.chat_message import BaseMessage, message_to_role
+from ..models.chat_message import BaseMessage, SystemMessage, message_to_role
 from .dependencies import get_tree_manager, get_llm_service, get_file_service
 from .schemas import (
     CreateTreeRequest,
@@ -114,6 +114,7 @@ async def create_tree(
         tree_id=tree.tree_id,
         title=tree.title,
         created_at=tree.created_at,
+        system_prompt=tree.system_prompt,
         root_node=_node_to_data(tree.root_node),
     )
 
@@ -148,6 +149,7 @@ async def get_tree(
         tree_id=tree.tree_id,
         title=tree.title,
         created_at=tree.created_at,
+        system_prompt=tree.system_prompt,
         root_node=_node_to_data(tree.root_node),
     )
 
@@ -190,7 +192,10 @@ async def chat(
         raise HTTPException(status_code=404, detail=str(e))
 
     # 2. 构建完整上下文（直接传 BaseMessage 给 LangChain）
+    tree = tm.get_tree(tree_id)
     context_messages: list[BaseMessage] = child_node.get_full_context()
+    if tree.system_prompt:
+        context_messages.insert(0, SystemMessage(content=tree.system_prompt))
 
     # 3. SSE 事件生成器
     async def event_generator() -> AsyncGenerator[dict[str, str], None]:
@@ -337,6 +342,7 @@ async def deserialize_tree(
         tree_id=tree.tree_id,
         title=tree.title,
         created_at=tree.created_at,
+        system_prompt=tree.system_prompt,
         root_node=_node_to_data(tree.root_node),
     )
 
