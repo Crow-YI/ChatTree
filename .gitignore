@@ -8,6 +8,7 @@ build/
 # Environment
 .env
 *.env.local
+config.json
 
 # IDE
 .vscode/

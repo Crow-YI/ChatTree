@@ -13,7 +13,7 @@ namespace TreeChat.Views
             InitializeComponent();
             ViewModel = new ConfigDialogViewModel(
                 ApiConfig.ApiKey, ApiConfig.ApiEndpoint, ApiConfig.ModelName,
-                ApiConfig.Temperature, ApiConfig.TopP, ApiConfig.TopK);
+                ApiConfig.Temperature, ApiConfig.TopP, ApiConfig.MaxTokens);
             DataContext = ViewModel;
             ViewModel.CloseRequest += result =>
             {
@@ -28,6 +28,6 @@ namespace TreeChat.Views
         public string ModelName => ViewModel.ModelName;
         public double Temperature => ViewModel.Temperature;
         public double TopP => ViewModel.TopP;
-        public int TopK => ViewModel.TopK;
+        public int MaxTokens => ViewModel.MaxTokens;
     }
 }

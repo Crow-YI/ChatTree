@@ -289,7 +289,6 @@ namespace TreeChat.Services
                 requestBody.Model = config.Model;
                 requestBody.Temperature = config.Temperature;
                 requestBody.TopP = config.TopP;
-                requestBody.TopK = config.TopK;
                 requestBody.MaxTokens = config.MaxTokens;
             }
 

@@ -1,11 +1,17 @@
-"""应用配置，从 .env 文件和环境变量中加载。支持多 LLM 供应商。
+"""应用配置，从 config.json 和 config.example.json 中加载。支持多 LLM 供应商。
 
-设计说明：保持 flat 字段用于从 .env 加载（兼容原有 DEEPSEEK_API_KEY 等变量名），
-在 get_provider_config 中动态构造 LLMProviderConfig 对象。
+设计说明：
+- config.json（项目根目录，.gitignore 中排除）存放用户配置（含 API Key）
+- config.example.json（进 git）存放默认值模板
+- 当 config.json 缺失时，自动从 config.example.json 复制一份
+- HOST / PORT 使用代码默认值，无需配置文件
 """
 
-from pydantic import BaseModel  # noqa: E402 — pydantic BaseModel，非 pydantic_settings
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
+import shutil
+from pathlib import Path
+
+from pydantic import BaseModel
 
 from ..core.errors import ConfigError
 
@@ -19,23 +25,17 @@ class LLMProviderConfig(BaseModel):
     timeout_seconds: int = 120
 
 
-class Settings(BaseSettings):
+class Settings(BaseModel):
     """全局配置单例。"""
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    # --- 服务器 ---
+    # --- 服务器（代码默认值，非用户可配）---
     host: str = "127.0.0.1"
     port: int = 8800
 
     # --- LLM 供应商选择 ---
     llm_provider: str = "deepseek"
 
-    # --- DeepSeek（flat 字段，从 .env 加载 DEEPSEEK_API_KEY 等）---
+    # --- DeepSeek（从 config.json 加载，或从 config.example.json 初始化）---
     deepseek_api_key: str = ""
     deepseek_api_base: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"
@@ -47,12 +47,50 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_timeout_seconds: int = 120
 
-    # --- 运行时配置（可由 WPF 通过 PUT /api/v1/config 动态覆盖）---
+    # --- 运行时配置（由 WPF 通过 PUT /api/v1/config 动态覆盖，或从 config.json 加载）---
     model: str = "deepseek-v4-flash"
     temperature: float = 0.7
     top_p: float = 0.8
-    top_k: int = 20
     max_tokens: int = 800
+
+    def load_config_file(self) -> None:
+        """从项目根目录的 config.json 加载用户配置。
+
+        若 config.json 不存在，则尝试从 config.example.json 复制一份。
+        映射关系：
+          api_key      → {provider}_api_key
+          api_endpoint → {provider}_api_base
+          model        → model
+          temperature  → temperature
+          top_p        → top_p
+          max_tokens   → max_tokens
+        """
+        config_path = Path(__file__).resolve().parents[3] / "config.json"
+
+        if not config_path.exists():
+            example_path = config_path.with_name("config.example.json")
+            if example_path.exists():
+                shutil.copy(example_path, config_path)
+            else:
+                return  # 都缺失则使用代码默认值
+
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return  # 文件损坏或不可读时静默忽略
+
+        # 供应商相关字段（根据当前激活的供应商映射）
+        provider = self.llm_provider
+        if "api_key" in data:
+            setattr(self, f"{provider}_api_key", data["api_key"])
+        if "api_endpoint" in data:
+            setattr(self, f"{provider}_api_base", data["api_endpoint"])
+
+        # 直接映射字段
+        for field in ("model", "temperature", "top_p", "max_tokens"):
+            if field in data:
+                setattr(self, field, data[field])
 
     @property
     def active_provider(self) -> LLMProviderConfig:
@@ -73,5 +111,6 @@ class Settings(BaseSettings):
             raise ConfigError(f"未知的 LLM 供应商: {name}")
 
 
-# 全局单例
+# 全局单例（启动时自动从 config.json 加载）
 settings = Settings()
+settings.load_config_file()

@@ -68,7 +68,6 @@ class ChatRequest(BaseModel):
     model: str | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
-    top_k: int | None = Field(default=None, ge=0, le=40)
     max_tokens: int | None = Field(default=None, ge=1, le=8192)
 
 
@@ -81,10 +80,9 @@ class RenameNodeRequest(BaseModel):
 # === Config ===
 
 class ConfigData(BaseModel):
-    model: str = "deepseek-chat"
+    model: str = "deepseek-v4-flash"
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     top_p: float = Field(default=0.8, ge=0.0, le=1.0)
-    top_k: int = Field(default=20, ge=0, le=40)
     max_tokens: int = Field(default=800, ge=1, le=8192)
 
 

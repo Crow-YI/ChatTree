@@ -165,7 +165,7 @@ namespace TreeChat.ViewModels
                 ApiConfig.ModelName = dialog.ModelName;
                 ApiConfig.Temperature = dialog.Temperature;
                 ApiConfig.TopP = dialog.TopP;
-                ApiConfig.TopK = dialog.TopK;
+                ApiConfig.MaxTokens = dialog.MaxTokens;
 
                 ApiConfig.SaveToFile();
 
@@ -177,7 +177,6 @@ namespace TreeChat.ViewModels
                             Model = ApiConfig.ModelName,
                             Temperature = ApiConfig.Temperature,
                             TopP = ApiConfig.TopP,
-                            TopK = ApiConfig.TopK,
                             MaxTokens = ApiConfig.MaxTokens,
                         });
                 }

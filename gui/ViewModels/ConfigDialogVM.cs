@@ -1,14 +1,31 @@
-﻿using TreeChat.Commands;
+using TreeChat.Commands;
 using TreeChat.Services;
 
 namespace TreeChat.ViewModels
 {
     public class ConfigDialogViewModel : BaseViewModel
     {
-        // 原始配置值
-        public string ApiKey { get; set; }
-        public string ApiEndpoint { get; set; }
-        public string ModelName { get; set; }
+        // 原始配置值（全部可编辑）
+        private string _apiKey;
+        public string ApiKey
+        {
+            get => _apiKey;
+            set => SetProperty(ref _apiKey, value);
+        }
+
+        private string _apiEndpoint;
+        public string ApiEndpoint
+        {
+            get => _apiEndpoint;
+            set => SetProperty(ref _apiEndpoint, value);
+        }
+
+        private string _modelName;
+        public string ModelName
+        {
+            get => _modelName;
+            set => SetProperty(ref _modelName, value);
+        }
 
         private double _temperature;
         public double Temperature
@@ -24,14 +41,15 @@ namespace TreeChat.ViewModels
             set => SetProperty(ref _topP, value);
         }
 
-        private int _topK;
-        public int TopK
+        private int _maxTokens;
+        public int MaxTokens
         {
-            get => _topK;
-            set => SetProperty(ref _topK, value);
+            get => _maxTokens;
+            set => SetProperty(ref _maxTokens, value);
         }
 
-        // 文本框绑定用字符串
+        // ---- 文本框绑定用字符串 ----
+
         private string _temperatureText;
         public string TemperatureText
         {
@@ -54,21 +72,22 @@ namespace TreeChat.ViewModels
             }
         }
 
-        private string _topKText;
-        public string TopKText
+        private string _maxTokensText;
+        public string MaxTokensText
         {
-            get => _topKText;
+            get => _maxTokensText;
             set
             {
-                if (SetProperty(ref _topKText, value))
-                    ValidateTopK();
+                if (SetProperty(ref _maxTokensText, value))
+                    ValidateMaxTokens();
             }
         }
 
-        // 显示默认值提示
+        // ---- 显示默认值提示 ----
+
         public string TemperatureDisplay => $"(默认 {ApiConfig.Temperature:F1})";
         public string TopPDisplay => $"(默认 {ApiConfig.TopP:F1})";
-        public string TopKDisplay => $"(默认 {ApiConfig.TopK})";
+        public string MaxTokensDisplay => $"(默认 {ApiConfig.MaxTokens})";
 
         private bool _isValid;
         public bool IsValid
@@ -83,18 +102,18 @@ namespace TreeChat.ViewModels
         public event Action<bool?> CloseRequest;
 
         public ConfigDialogViewModel(string apiKey, string apiEndpoint, string modelName,
-                                      double temperature, double topP, int topK)
+                                      double temperature, double topP, int maxTokens)
         {
-            ApiKey = apiKey;
-            ApiEndpoint = apiEndpoint;
-            ModelName = modelName;
+            _apiKey = apiKey;
+            _apiEndpoint = apiEndpoint;
+            _modelName = modelName;
             Temperature = temperature;
             TopP = topP;
-            TopK = topK;
+            MaxTokens = maxTokens;
 
             _temperatureText = temperature.ToString();
             _topPText = topP.ToString();
-            _topKText = topK.ToString();
+            _maxTokensText = maxTokens.ToString();
 
             ValidateAll();
             ConfirmCommand = new RelayCommand(_ => Confirm(), _ => IsValid);
@@ -121,12 +140,12 @@ namespace TreeChat.ViewModels
             ValidateAll();
         }
 
-        private void ValidateTopK()
+        private void ValidateMaxTokens()
         {
-            if (int.TryParse(TopKText, out int value) && value >= 0 && value <= 40)
+            if (int.TryParse(MaxTokensText, out int value) && value >= 1 && value <= 8192)
             {
-                TopK = value;
-                OnPropertyChanged(nameof(TopK));
+                MaxTokens = value;
+                OnPropertyChanged(nameof(MaxTokens));
             }
             ValidateAll();
         }
@@ -135,8 +154,8 @@ namespace TreeChat.ViewModels
         {
             bool tempOk = double.TryParse(TemperatureText, out double t) && t >= 0 && t <= 2;
             bool topPOk = double.TryParse(TopPText, out double p) && p >= 0 && p <= 1;
-            bool topKOk = int.TryParse(TopKText, out int k) && k >= 0 && k <= 40;
-            IsValid = tempOk && topPOk && topKOk;
+            bool maxTokensOk = int.TryParse(MaxTokensText, out int m) && m >= 1 && m <= 8192;
+            IsValid = tempOk && topPOk && maxTokensOk;
         }
 
         private void Confirm()

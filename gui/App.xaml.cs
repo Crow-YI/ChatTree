@@ -55,7 +55,6 @@ namespace TreeChat
                     Model = ApiConfig.ModelName,
                     Temperature = ApiConfig.Temperature,
                     TopP = ApiConfig.TopP,
-                    TopK = ApiConfig.TopK,
                     MaxTokens = ApiConfig.MaxTokens,
                 });
             }

@@ -296,7 +296,6 @@ async def get_config() -> ConfigData:
         model=settings.model,
         temperature=settings.temperature,
         top_p=settings.top_p,
-        top_k=settings.top_k,
         max_tokens=settings.max_tokens,
     )
 
@@ -307,7 +306,6 @@ async def update_config(req: ConfigData) -> SuccessResponse:
     settings.model = req.model
     settings.temperature = req.temperature
     settings.top_p = req.top_p
-    settings.top_k = req.top_k
     settings.max_tokens = req.max_tokens
     return SuccessResponse()
 

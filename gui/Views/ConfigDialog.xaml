@@ -6,7 +6,7 @@
         mc:Ignorable="d"
         Title="AI配置"
         Width="450"
-        Height="400"
+        Height="430"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -18,49 +18,49 @@
         <TextBlock Grid.Row="0" Text="AI参数配置（基于ChatECNU）" FontSize="16" FontWeight="Bold" Margin="0,0,0,20"/>
 
         <StackPanel Grid.Row="1">
-            <!-- API Key（自由文本，无验证） -->
+            <!-- API Key -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,15">
                 <TextBlock Text="API Key:" Width="100" VerticalAlignment="Center"/>
-                <TextBox Text="{Binding ApiKey}" Width="250"/>
+                <TextBox Text="{Binding ApiKey, UpdateSourceTrigger=PropertyChanged}" Width="250"/>
             </StackPanel>
 
-            <!-- API端口（只读） -->
+            <!-- API端点 -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,15">
-                <TextBlock Text="API端口:" Width="100" VerticalAlignment="Center"/>
-                <TextBox Text="{Binding ApiEndpoint}" Width="250" IsReadOnly="True" Background="#F0F0F0"/>
+                <TextBlock Text="API端点:" Width="100" VerticalAlignment="Center"/>
+                <TextBox Text="{Binding ApiEndpoint, UpdateSourceTrigger=PropertyChanged}" Width="250"/>
             </StackPanel>
 
-            <!-- 模型名称（只读） -->
+            <!-- 模型名称 -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,15">
                 <TextBlock Text="模型名称:" Width="100" VerticalAlignment="Center"/>
-                <TextBox Text="{Binding ModelName}" Width="250" IsReadOnly="True" Background="#F0F0F0"/>
+                <TextBox Text="{Binding ModelName, UpdateSourceTrigger=PropertyChanged}" Width="250"/>
             </StackPanel>
 
-            <!-- 随机性 Temperature（文本框输入，范围 0~2） -->
+            <!-- 随机性 Temperature（范围 0~2） -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,15">
                 <TextBlock Text="随机性:" Width="100" VerticalAlignment="Center"/>
-                <TextBox Text="{Binding TemperatureText, UpdateSourceTrigger=PropertyChanged}" 
+                <TextBox Text="{Binding TemperatureText, UpdateSourceTrigger=PropertyChanged}"
                          Width="80" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <TextBlock Text="范围:0~2" VerticalAlignment="Center" Margin="0,0,15,0"/>
                 <TextBlock Text="{Binding TemperatureDisplay}" Width="120" VerticalAlignment="Center" Foreground="Gray"/>
             </StackPanel>
 
-            <!-- 核采样 TopP（文本框输入，范围 0~1） -->
+            <!-- 核采样 TopP（范围 0~1） -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,15">
                 <TextBlock Text="核采样:" Width="100" VerticalAlignment="Center"/>
-                <TextBox Text="{Binding TopPText, UpdateSourceTrigger=PropertyChanged}" 
+                <TextBox Text="{Binding TopPText, UpdateSourceTrigger=PropertyChanged}"
                          Width="80" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <TextBlock Text="范围:0~1" VerticalAlignment="Center" Margin="0,0,15,0"/>
                 <TextBlock Text="{Binding TopPDisplay}" Width="120" VerticalAlignment="Center" Foreground="Gray"/>
             </StackPanel>
 
-            <!-- 候选词数量 TopK（文本框输入，整数，范围 0~40） -->
+            <!-- MaxTokens（范围 1~8192） -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,15">
-                <TextBlock Text="候选词数量:" Width="100" VerticalAlignment="Center"/>
-                <TextBox Text="{Binding TopKText, UpdateSourceTrigger=PropertyChanged}" 
+                <TextBlock Text="最大Token数:" Width="100" VerticalAlignment="Center"/>
+                <TextBox Text="{Binding MaxTokensText, UpdateSourceTrigger=PropertyChanged}"
                          Width="80" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <TextBlock Text="范围:0~40" VerticalAlignment="Center" Margin="0,0,15,0"/>
-                <TextBlock Text="{Binding TopKDisplay}" Width="120" VerticalAlignment="Center" Foreground="Gray"/>
+                <TextBlock Text="范围:1~8192" VerticalAlignment="Center" Margin="0,0,15,0"/>
+                <TextBlock Text="{Binding MaxTokensDisplay}" Width="120" VerticalAlignment="Center" Foreground="Gray"/>
             </StackPanel>
         </StackPanel>
 

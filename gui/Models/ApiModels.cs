@@ -110,10 +110,6 @@ namespace TreeChat.Models
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public double? TopP { get; set; }
 
-        [JsonPropertyName("top_k")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public int? TopK { get; set; }
-
         [JsonPropertyName("max_tokens")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? MaxTokens { get; set; }
@@ -180,9 +176,6 @@ namespace TreeChat.Models
 
         [JsonPropertyName("top_p")]
         public double TopP { get; set; } = 0.8;
-
-        [JsonPropertyName("top_k")]
-        public int TopK { get; set; } = 20;
 
         [JsonPropertyName("max_tokens")]
         public int MaxTokens { get; set; } = 800;
