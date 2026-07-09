@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Media;
 using TreeChat.Models;
 
 namespace TreeChat.ViewModels
@@ -12,8 +14,32 @@ namespace TreeChat.ViewModels
         public const double WIDTH = 40;
         public const double HEIGHT = 30;
 
-        public double X {  get; set; }
-        public double Y { get; set; }
+        private double _x;
+        public double X
+        {
+            get => _x;
+            set
+            {
+                if (SetProperty(ref _x, value))
+                    OnPropertyChanged(nameof(Location));
+            }
+        }
+
+        private double _y;
+        public double Y
+        {
+            get => _y;
+            set
+            {
+                if (SetProperty(ref _y, value))
+                    OnPropertyChanged(nameof(Location));
+            }
+        }
+
+        /// <summary>
+        /// 供 NodifyDecoratorContainer 绑定的位置
+        /// </summary>
+        public Point Location => new Point(_x, _y);
 
         public List<double> SubtreeWidth { get; set; } = new List<double>();
 
@@ -28,6 +54,25 @@ namespace TreeChat.ViewModels
         private readonly ObservableCollection<TreeNodeVM> _children;
 
         public ReadOnlyObservableCollection<TreeNodeVM> Children { get; }
+
+        private bool _isSelected;
+        /// <summary>
+        /// 节点是否被选中
+        /// </summary>
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (SetProperty(ref _isSelected, value))
+                    OnPropertyChanged(nameof(BorderBrush));
+            }
+        }
+
+        /// <summary>
+        /// 边框画笔，选中时蓝色，未选中灰色
+        /// </summary>
+        public Brush BorderBrush => IsSelected ? Brushes.Blue : Brushes.Gray;
 
         public TreeNodeVM(ChatTreeNode node, TreeNodeVM? parentNode)
         {

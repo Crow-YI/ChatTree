@@ -16,9 +16,7 @@
                                    DataContext="{Binding ChatManagementPanelVM}"/>
 
         <Border Grid.Column="1" Margin="8,0,8,0" Background="Transparent">
-            <local:TreeVisualizationView x:Name="treeView"
-                                         DataContext="{Binding TreeVisualizationVM}"
-                                         SelectedNode="{Binding SelectedNode, Mode=TwoWay}"/>
+            <local:TreeVisualizationView x:Name="treeView" DataContext="{Binding TreeVisualizationVM}"/>
         </Border>
 
         <local:ChatInformationView Grid.Column="2"

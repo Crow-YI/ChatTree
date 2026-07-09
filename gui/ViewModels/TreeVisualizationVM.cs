@@ -1,4 +1,7 @@
-﻿using System.Windows;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.Linq;
+using System.Windows;
 using TreeChat.Commands;
 using TreeChat.Models;
 using TreeChat.Services;
@@ -10,17 +13,25 @@ namespace TreeChat.ViewModels
         // 根节点VM
         public TreeNodeVM? RootNode { get; private set; }
 
-        // 选中的节点（与View的依赖属性双向绑定）
+        // 选中的节点
         private TreeNodeVM? _selectedNode;
         public TreeNodeVM? SelectedNode
         {
             get => _selectedNode;
             set
             {
-                if(value != null && _selectedNode != value)
-                    SelectedNodeChanged?.Invoke(value);
-                SetProperty(ref _selectedNode, value);
-                RenameNodeCommand?.OnCanExecuteChanged();
+                if (_selectedNode != null)
+                    _selectedNode.IsSelected = false;
+
+                if (SetProperty(ref _selectedNode, value))
+                {
+                    if (value != null)
+                    {
+                        value.IsSelected = true;
+                        SelectedNodeChanged?.Invoke(value);
+                    }
+                    RenameNodeCommand?.OnCanExecuteChanged();
+                }
             }
         }
 
@@ -31,21 +42,75 @@ namespace TreeChat.ViewModels
             set => SetProperty(ref _currentChatTree, value);
         }
 
+        /// <summary>
+        /// 展平的节点列表，供 NodifyEditor.Decorators 绑定
+        /// </summary>
+        public ObservableCollection<TreeNodeVM> Decorators { get; } = new();
+
+        /// <summary>
+        /// 连线列表，供 NodifyEditor.Connections 绑定
+        /// </summary>
+        public ObservableCollection<ConnectionVM> Connections { get; } = new();
+
+        /// <summary>
+        /// NodifyEditor 选中项集合（双向绑定用）
+        /// </summary>
+        public ObservableCollection<object> SelectedItems { get; } = new();
+
         public RelayCommand ShowConfigCommand { get; }
         public RelayCommand RenameNodeCommand { get; }
-
-        public event Action? CanvasPropertyChanged;
+        public RelayCommand SelectNodeCommand { get; }
 
         public event Action<TreeNodeVM>? SelectedNodeChanged;
+
+        /// <summary>
+        /// 树渲染完成后触发（供 View 执行 FitToScreen 等操作）
+        /// </summary>
+        public event Action? TreeRendered;
 
         public TreeVisualizationVM()
         {
             RootNode = null;
-            // 先初始化命令
             ShowConfigCommand = new RelayCommand(ExecuteShowConfig);
             RenameNodeCommand = new RelayCommand(ExecuteRenameNode, CanExecuteRenameNode);
-            // 再设置SelectedNode
+            SelectNodeCommand = new RelayCommand(ExecuteSelectNode);
             SelectedNode = null;
+
+            SelectedItems.CollectionChanged += OnSelectedItemsChanged;
+        }
+
+        /// <summary>
+        /// NodifyEditor 选中变化时同步到 SelectedNode
+        /// </summary>
+        private void OnSelectedItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            var selected = SelectedItems.OfType<TreeNodeVM>().FirstOrDefault();
+            SelectedNode = selected;
+        }
+
+        /// <summary>
+        /// 用户鼠标点击节点时选中
+        /// </summary>
+        private void ExecuteSelectNode(object? parameter)
+        {
+            if (parameter is TreeNodeVM node)
+            {
+                SelectedNode = node;
+                // 用户点击时 DecoratorContainer 已存在，直接同步选中
+                SelectedItems.Clear();
+                SelectedItems.Add(node);
+            }
+        }
+
+        /// <summary>
+        /// 将当前选中状态同步到 SelectedItems 集合（供 NodifyEditor 识别）
+        /// 在 Decorators 渲染完成后调用，避免 Nodify 找不到对应容器
+        /// </summary>
+        public void SyncSelectedToNodify()
+        {
+            SelectedItems.Clear();
+            if (_selectedNode != null)
+                SelectedItems.Add(_selectedNode);
         }
 
         private bool CanExecuteRenameNode(object? parameter)
@@ -81,19 +146,20 @@ namespace TreeChat.ViewModels
                     }
                     // 通知UI更新
                     OnPropertyChanged(nameof(SelectedNode));
-                    CanvasPropertyChanged?.Invoke();
+                    RebuildAll(RootNode!);
+                    Application.Current.Dispatcher.InvokeAsync(
+                        SyncSelectedToNodify,
+                        System.Windows.Threading.DispatcherPriority.Background);
                 }
             }
         }
 
         private async void ExecuteShowConfig(object? parameter)
         {
-            // 直接打开配置对话框，构造时已自动读取 ApiConfig 中的当前值
             var dialog = new Views.ConfigDialog();
 
             if (dialog.ShowDialog() == true)
             {
-                // 将修改后的配置保存回全局 ApiConfig
                 ApiConfig.ApiKey = dialog.ApiKey;
                 ApiConfig.ApiEndpoint = dialog.ApiEndpoint;
                 ApiConfig.ModelName = dialog.ModelName;
@@ -101,14 +167,12 @@ namespace TreeChat.ViewModels
                 ApiConfig.TopP = dialog.TopP;
                 ApiConfig.TopK = dialog.TopK;
 
-                // 持久化到文件
                 ApiConfig.SaveToFile();
 
-                // 同步到 Python 后端
                 try
                 {
                     await App.Backend.PushConfigAsync(
-                        new Models.ChatConfigData
+                        new ChatConfigData
                         {
                             Model = ApiConfig.ModelName,
                             Temperature = ApiConfig.Temperature,
@@ -121,20 +185,77 @@ namespace TreeChat.ViewModels
             }
         }
 
+        /// <summary>
+        /// 设置新的对话树，触发布局计算并重建展平列表和连线
+        /// </summary>
         public void SetTree(TreeNodeVM rootNode)
         {
-            RootNode = rootNode;
-            TreeLayoutService.LayoutTree(RootNode);
-            CanvasPropertyChanged?.Invoke();
-            SelectedNode = rootNode;
+            try
+            {
+                RootNode = rootNode;
+                TreeLayoutService.LayoutTree(RootNode);
+                RebuildAll(RootNode);
+                SelectedNode = rootNode;
+
+                // NodifyEditor 需要等布局通道完成才能创建 DecoratorContainer，
+                // 延后同步选中状态，避免 Nodify 找不到容器而崩溃
+                Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    SyncSelectedToNodify();
+                    TreeRendered?.Invoke();
+                }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"SetTree 异常：{ex.GetType().Name}\n{ex.Message}\n\n堆栈：{ex.StackTrace}",
+                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
+        /// <summary>
+        /// 树变更后增量更新布局并重建展平列表和连线
+        /// </summary>
         public void UpdateTree(TreeNodeVM updateNode, TreeNodeVM selectedNode)
         {
-            if(RootNode == null)
+            if (RootNode == null)
                 return;
             TreeLayoutService.UpdateLayoutTree(updateNode);
-            CanvasPropertyChanged?.Invoke();
+            RebuildAll(RootNode);
+            SelectedNode = selectedNode;
+
+            Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                SyncSelectedToNodify();
+                TreeRendered?.Invoke();
+            }, System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// 重建 Decorators 和 Connections 集合
+        /// </summary>
+        private void RebuildAll(TreeNodeVM rootNode)
+        {
+            Decorators.Clear();
+            RebuildFlatList(rootNode);
+
+            Connections.Clear();
+            RebuildConnections(rootNode);
+        }
+
+        private void RebuildFlatList(TreeNodeVM node)
+        {
+            Decorators.Add(node);
+            foreach (var child in node.Children)
+                RebuildFlatList(child);
+        }
+
+        private void RebuildConnections(TreeNodeVM node)
+        {
+            foreach (var child in node.Children)
+            {
+                Connections.Add(new ConnectionVM(node, child));
+                RebuildConnections(child);
+            }
         }
     }
-}
+}

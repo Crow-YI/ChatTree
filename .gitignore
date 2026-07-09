@@ -12,6 +12,7 @@ build/
 # IDE
 .vscode/
 .idea/
+.vs/
 
 # uv / venv
 .venv/
@@ -25,4 +26,4 @@ gui/obj/
 BackendStructure.md
 FrontendStructure.md
 Plan.md
-CommitInfo.md
+CommitInfo.md

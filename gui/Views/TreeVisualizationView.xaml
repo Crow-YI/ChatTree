@@ -3,6 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TreeChat.ViewModels"
+             xmlns:nodify="clr-namespace:Nodify;assembly=Nodify"
              mc:Ignorable="d"
              d:DesignHeight="4500" d:DesignWidth="8000">
     <Grid Background="{StaticResource CardBackground}" Margin="0,0,0,0">
@@ -11,7 +13,7 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- 工具栏背景浅色 -->
+        <!-- 工具栏 -->
         <Border Grid.Row="0" Background="#F8FAFE" BorderBrush="#E2E6EA" BorderThickness="0,0,0,1" Padding="10,8">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                 <Button Content="更改配置" Command="{Binding ShowConfigCommand}" Margin="0,0,10,0" Padding="10,5"/>
@@ -21,16 +23,60 @@
             </StackPanel>
         </Border>
 
-        <!-- 画布区域白色背景加内边距 -->
-        <ScrollViewer Grid.Row="1" x:Name="scrollViewer"
-                      Background="White"
-                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                      AllowDrop="True"
-                      DragEnter="ScrollViewer_DragEnter" DragOver="ScrollViewer_DragOver" Drop="ScrollViewer_Drop"
-                      PreviewMouseWheel="ScrollViewer_PreviewMouseWheel"
-                      PreviewMouseLeftButtonDown="ScrollViewer_PreviewMouseLeftButtonDown"
-                      MouseMove="ScrollViewer_MouseMove" MouseLeftButtonUp="ScrollViewer_MouseLeftButtonUp">
-            <Canvas x:Name="treeCanvas" Background="White"/>
-        </ScrollViewer>
+        <!-- NodifyEditor 区域 -->
+        <nodify:NodifyEditor Grid.Row="1" x:Name="editor"
+                              Background="White"
+                              Decorators="{Binding Decorators}"
+                              Connections="{Binding Connections}"
+                              SelectedItems="{Binding SelectedItems}"
+                              CanSelectMultipleItems="False"
+                              AllowDrop="True"
+                              DragEnter="ScrollViewer_DragEnter"
+                              DragOver="ScrollViewer_DragOver"
+                              Drop="ScrollViewer_Drop">
+
+            <!-- 节点位置绑定 -->
+            <nodify:NodifyEditor.DecoratorContainerStyle>
+                <Style TargetType="nodify:DecoratorContainer">
+                    <Setter Property="Location" Value="{Binding Location, Mode=OneWay}" />
+                </Style>
+            </nodify:NodifyEditor.DecoratorContainerStyle>
+
+            <!-- 节点外观模板 -->
+            <nodify:NodifyEditor.DecoratorTemplate>
+                <DataTemplate DataType="{x:Type vm:TreeNodeVM}">
+                    <Border Background="#DCE6F0"
+                            BorderBrush="{Binding BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="3"
+                            Cursor="Hand"
+                            MinWidth="40"
+                            MinHeight="30"
+                            Padding="8,4">
+                        <Border.InputBindings>
+                            <MouseBinding Gesture="LeftClick"
+                                          Command="{Binding DataContext.SelectNodeCommand, RelativeSource={RelativeSource AncestorType=nodify:NodifyEditor}}"
+                                          CommandParameter="{Binding}" />
+                        </Border.InputBindings>
+                        <TextBlock Text="{Binding DisplayContent}"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center" />
+                    </Border>
+                </DataTemplate>
+            </nodify:NodifyEditor.DecoratorTemplate>
+
+            <!-- 连线外观模板：用 Line 画直线 -->
+            <nodify:NodifyEditor.ConnectionTemplate>
+                <DataTemplate DataType="{x:Type vm:ConnectionVM}">
+                    <Line X1="{Binding SourcePoint.X}"
+                          Y1="{Binding SourcePoint.Y}"
+                          X2="{Binding TargetPoint.X}"
+                          Y2="{Binding TargetPoint.Y}"
+                          Stroke="Black"
+                          StrokeThickness="1.5" />
+                </DataTemplate>
+            </nodify:NodifyEditor.ConnectionTemplate>
+
+        </nodify:NodifyEditor>
     </Grid>
-</UserControl>
+</UserControl>
