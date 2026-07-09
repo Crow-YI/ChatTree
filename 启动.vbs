@@ -79,12 +79,12 @@ End If
 ' Launch WPF frontend
 WpfDir = ScriptDir & "\gui"
 ReleaseExe = WpfDir & "\bin\Release\net8.0-windows\TreeChat.exe"
-DebugDll = WpfDir & "\bin\Debug\net8.0-windows\TreeChat.dll"
+DebugExe = WpfDir & "\bin\Debug\net8.0-windows\TreeChat.exe"
 
 If FSO.FileExists(ReleaseExe) Then
     WshShell.Run """" & ReleaseExe & """", 1, False
-ElseIf FSO.FileExists(DebugDll) Then
-    WshShell.Run "dotnet run --project """ & WpfDir & """", 1, False
+ElseIf FSO.FileExists(DebugExe) Then
+    WshShell.Run """" & DebugExe & """", 1, False
 Else
     ' First run: compile
     Dim result

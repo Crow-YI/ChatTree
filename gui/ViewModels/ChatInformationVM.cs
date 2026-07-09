@@ -109,58 +109,63 @@ namespace TreeChat.ViewModels
                 string treeId = CurrentChatTree.TreeId!;
 
                 string fullContent = "";
-                await foreach (var sseEvent in backend.ChatStreamAsync(
-                    treeId, previousSelected.Node.NodeID, message))
+                // 在后台线程上消费 SSE 流，避免阻塞 UI 线程渲染
+                var sseEvents = backend.ChatStreamAsync(
+                    treeId, previousSelected.Node.NodeID, message);
+                await Task.Run(async () =>
                 {
-                    switch (sseEvent.EventType)
+                    await foreach (var sseEvent in sseEvents)
                     {
-                        case "created":
-                            // 更新节点 ID
-                            var created = System.Text.Json.JsonSerializer.Deserialize<Models.SseCreatedEvent>(sseEvent.Data);
-                            if (created != null)
-                            {
-                                // 更新本地节点的 NodeID 以匹配后端
-                                var node = SelectedNode.Node;
-                                // Reflect node ID update via reflection or by syncing
-                            }
-                            break;
+                        switch (sseEvent.EventType)
+                        {
+                            case "created":
+                                break;
 
-                        case "delta":
-                            var delta = System.Text.Json.JsonSerializer.Deserialize<Models.SseDeltaEvent>(sseEvent.Data);
-                            if (delta != null)
-                            {
-                                fullContent += delta.Content;
-                                // 实时更新 UI（流式打字机效果）
-                                Application.Current.Dispatcher.Invoke(() =>
+                            case "delta":
+                                var delta = System.Text.Json.JsonSerializer.Deserialize<Models.SseDeltaEvent>(sseEvent.Data);
+                                if (delta != null)
                                 {
-                                    AIReply = fullContent;
+                                    fullContent += delta.Content;
+                                    var contentToShow = fullContent;
+                                    // 以 Background 优先级调度（低于 DataBind 和 Render），
+                                    // 确保上一轮 DataBind(8)→Render(7) 完成后再更新
+                                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                                    {
+                                        AIReply = contentToShow;
+                                    }, System.Windows.Threading.DispatcherPriority.Background);
+                                }
+                                break;
+
+                            case "done":
+                                var done = System.Text.Json.JsonSerializer.Deserialize<Models.SseDoneEvent>(sseEvent.Data);
+                                await Application.Current.Dispatcher.InvokeAsync(() =>
+                                {
+                                    if (done?.ReplyMessage != null)
+                                    {
+                                        SelectedNode.Node.SetAiReply(new ChatMessage("assistant", done.ReplyMessage.Content));
+                                    }
+                                    // 触发树更新
+                                    ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
                                 });
-                            }
-                            break;
+                                return;
 
-                        case "done":
-                            var done = System.Text.Json.JsonSerializer.Deserialize<Models.SseDoneEvent>(sseEvent.Data);
-                            if (done?.ReplyMessage != null)
-                            {
-                                SelectedNode.Node.SetAiReply(new ChatMessage("assistant", done.ReplyMessage.Content));
-                            }
-                            // 触发树更新
-                            ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
-                            return;
-
-                        case "error":
-                            var error = System.Text.Json.JsonSerializer.Deserialize<Models.SseErrorEvent>(sseEvent.Data);
-                            // 失败清理
-                            previousSelected.RemoveChild(newNodeVM);
-                            SelectedNode = previousSelected;
-                            ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
-                            AIReply = string.Empty;
-                            MessageBox.Show(
-                                error?.Message ?? "AI 调用失败。",
-                                "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-                            return;
+                            case "error":
+                                var error = System.Text.Json.JsonSerializer.Deserialize<Models.SseErrorEvent>(sseEvent.Data);
+                                await Application.Current.Dispatcher.InvokeAsync(() =>
+                                {
+                                    // 失败清理
+                                    previousSelected.RemoveChild(newNodeVM);
+                                    SelectedNode = previousSelected;
+                                    ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
+                                    AIReply = string.Empty;
+                                    MessageBox.Show(
+                                        error?.Message ?? "AI 调用失败。",
+                                        "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                                });
+                                return;
+                        }
                     }
-                }
+                });
             }
             catch (HttpRequestException ex)
             {
