@@ -22,6 +22,7 @@ gui/bin/
 gui/obj/
 
 # 项目调整文档
-Structure.md
+BackendStructure.md
+FrontendStructure.md
 Plan.md
 CommitInfo.md

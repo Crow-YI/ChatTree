@@ -247,10 +247,7 @@ namespace TreeChat.ViewModels
 
             if (response.RootNode != null)
             {
-                var rootMsg = new ChatMessage(
-                    response.RootNode.UserMessage?.Role ?? "system",
-                    response.RootNode.UserMessage?.Content ?? "");
-                var rootNode = new ChatTreeNode(null, rootMsg, response.RootNode.NodeId);
+                var rootNode = new ChatTreeNode(null, response.RootNode.UserMessage?.Content ?? "", response.RootNode.NodeId);
                 tree.SetRootNode(rootNode);
                 ConvertChildren(rootNode, response.RootNode.Children);
             }
@@ -264,16 +261,12 @@ namespace TreeChat.ViewModels
             {
                 var node = new ChatTreeNode(
                     parent,
-                    new ChatMessage(
-                        childData.UserMessage?.Role ?? "user",
-                        childData.UserMessage?.Content ?? ""),
+                    childData.UserMessage?.Content ?? "",
                     childData.NodeId);
 
                 if (childData.ReplyMessage != null)
                 {
-                    node.SetAiReply(new ChatMessage(
-                        childData.ReplyMessage.Role,
-                        childData.ReplyMessage.Content));
+                    node.SetAiReply(childData.ReplyMessage.Content);
                 }
 
                 if (childData.Name != null)

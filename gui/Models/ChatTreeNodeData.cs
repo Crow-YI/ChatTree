@@ -11,14 +11,14 @@ namespace TreeChat.Models
         public int NodeId { get; set; }
 
         /// <summary>
-        /// 用户消息
+        /// 用户消息内容
         /// </summary>
-        public ChatMessageData UserMessage { get; set; } = new ChatMessageData();
+        public string UserMessage { get; set; } = string.Empty;
 
         /// <summary>
-        /// AI回复消息（可能为null）
+        /// AI回复消息内容（可能为null）
         /// </summary>
-        public ChatMessageData? ReplyMessage { get; set; }
+        public string? ReplyMessage { get; set; }
 
         /// <summary>
         /// 子节点列表
@@ -37,12 +37,8 @@ namespace TreeChat.Models
         public ChatTreeNodeData(ChatTreeNode node)
         {
             NodeId = node.NodeID;
-            UserMessage = new ChatMessageData(node.UserMessage);
-            
-            if (node.ReplyMessage != null)
-            {
-                ReplyMessage = new ChatMessageData(node.ReplyMessage);
-            }
+            UserMessage = node.UserMessage;
+            ReplyMessage = node.ReplyMessage;
 
             foreach (var child in node.ChildNodes)
             {
@@ -58,12 +54,11 @@ namespace TreeChat.Models
         /// <returns>ChatTreeNode对象</returns>
         public ChatTreeNode ToChatTreeNode(ChatTreeNode? parent, ref int nextNodeId)
         {
-            // 使用连续的编号，忽略保存时的NodeId
-            var node = new ChatTreeNode(parent, UserMessage.ToChatMessage(), nextNodeId++);
-            
+            var node = new ChatTreeNode(parent, UserMessage, nextNodeId++);
+
             if (ReplyMessage != null)
             {
-                node.SetAiReply(ReplyMessage.ToChatMessage());
+                node.SetAiReply(ReplyMessage);
             }
 
             foreach (var childData in ChildNodes)
@@ -82,11 +77,11 @@ namespace TreeChat.Models
         /// <returns>ChatTreeNode对象</returns>
         public ChatTreeNode ToChatTreeNode(ChatTreeNode? parent = null)
         {
-            var node = new ChatTreeNode(parent, UserMessage.ToChatMessage());
-            
+            var node = new ChatTreeNode(parent, UserMessage);
+
             if (ReplyMessage != null)
             {
-                node.SetAiReply(ReplyMessage.ToChatMessage());
+                node.SetAiReply(ReplyMessage);
             }
 
             foreach (var childData in ChildNodes)

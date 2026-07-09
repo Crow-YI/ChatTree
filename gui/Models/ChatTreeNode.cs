@@ -7,8 +7,8 @@ namespace TreeChat.Models
     {
         public ChatTreeNode? ParentNode { get; }
         public List<ChatTreeNode> ChildNodes { get; } = new List<ChatTreeNode>();
-        public ChatMessage UserMessage { get; }
-        public ChatMessage? ReplyMessage { get; private set; }
+        public string UserMessage { get; }
+        public string? ReplyMessage { get; private set; }
         public int NodeID { get; }
         public string? Name { get; set; }
 
@@ -17,7 +17,7 @@ namespace TreeChat.Models
         /// <summary>
         /// 用于创建新节点的构造函数，自动分配 NodeID
         /// </summary>
-        public ChatTreeNode(ChatTreeNode? parentNode, ChatMessage userMessage)
+        public ChatTreeNode(ChatTreeNode? parentNode, string userMessage)
         {
             ParentNode = parentNode;
             UserMessage = userMessage;
@@ -27,7 +27,7 @@ namespace TreeChat.Models
         /// <summary>
         /// 用于从文件加载节点的构造函数，使用指定的 NodeID（不递增 _nextNodeID）
         /// </summary>
-        public ChatTreeNode(ChatTreeNode? parentNode, ChatMessage userMessage, int nodeId)
+        public ChatTreeNode(ChatTreeNode? parentNode, string userMessage, int nodeId)
         {
             ParentNode = parentNode;
             UserMessage = userMessage;
@@ -51,35 +51,9 @@ namespace TreeChat.Models
         }
 
         /// <summary>
-        /// 得到完整上下文，包括从根节点到当前节点的所有用户消息和AI回复，按照时间顺序排列
-        /// </summary>
-        /// <returns></returns>
-        public List<ChatMessage> GetFullContext()
-        {
-            var context = new List<ChatMessage>();
-            var currentNode = this;
-
-            while (currentNode != null)
-            {
-                if (currentNode.ReplyMessage != null && !string.IsNullOrEmpty(currentNode.ReplyMessage.Content))
-                    context.Add(currentNode.ReplyMessage);
-
-                if (!string.IsNullOrEmpty(currentNode.UserMessage.Content))
-                    context.Add(currentNode.UserMessage);
-
-                currentNode = currentNode.ParentNode;
-            }
-
-            context.Reverse();
-            return context;
-        }
-
-        /// <summary>
         /// 添加一个新的子节点，包含用户消息，并返回新创建的子节点
         /// </summary>
-        /// <param name="userMessage"></param>
-        /// <returns></returns>
-        public ChatTreeNode AddChildNode(ChatMessage userMessage)
+        public ChatTreeNode AddChildNode(string userMessage)
         {
             var childNode = new ChatTreeNode(this, userMessage);
             ChildNodes.Add(childNode);
@@ -89,8 +63,7 @@ namespace TreeChat.Models
         /// <summary>
         /// 设置AI回复消息
         /// </summary>
-        /// <param name="replyMessage"></param>
-        public void SetAiReply(ChatMessage replyMessage)
+        public void SetAiReply(string replyMessage)
         {
             ReplyMessage = replyMessage;
         }

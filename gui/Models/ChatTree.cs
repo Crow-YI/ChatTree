@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using TreeChat.Services;
 
 namespace TreeChat.Models
 {
@@ -64,7 +63,7 @@ namespace TreeChat.Models
         /// </summary>
         public ChatTree()
         {
-            RootNode = new ChatTreeNode(null, new ChatMessage("system", "你是一个有帮助的AI助手。"));
+            RootNode = new ChatTreeNode(null, "你是一个有帮助的AI助手。");
             CurrentNode = RootNode;
         }
 
@@ -77,7 +76,7 @@ namespace TreeChat.Models
             var finalSystemPrompt = string.IsNullOrWhiteSpace(systemPrompt)
                 ? "你是一个有帮助的AI助手。"
                 : systemPrompt;
-            RootNode = new ChatTreeNode(null, new ChatMessage("system", finalSystemPrompt));
+            RootNode = new ChatTreeNode(null, finalSystemPrompt);
             CurrentNode = RootNode;
         }
 
