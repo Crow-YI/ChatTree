@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Threading;
 using TreeChat.Models;
+using TreeChat.Services;
 
 namespace TreeChat.ViewModels
 {
@@ -17,6 +19,14 @@ namespace TreeChat.ViewModels
     /// </summary>
     public class MainWindowVM : BaseViewModel
     {
+        private readonly IFileService _fileService;
+        private DispatcherTimer? _autoSaveTimer;
+
+        /// <summary>
+        /// 自动保存间隔（后续可改为配置项）
+        /// </summary>
+        private static readonly TimeSpan AutoSaveInterval = TimeSpan.FromMinutes(10);
+
         // === 导航状态 ===
         private ActiveViewType _activeView = ActiveViewType.FileView;
         public ActiveViewType ActiveView
@@ -49,9 +59,11 @@ namespace TreeChat.ViewModels
         public Commands.RelayCommand ShowFileViewCommand { get; }
         public Commands.RelayCommand ShowSettingsCommand { get; }
 
-        public MainWindowVM()
+        public MainWindowVM(IFileService fileService)
         {
-            FileViewVM = new FileViewVM();
+            _fileService = fileService;
+
+            FileViewVM = new FileViewVM(fileService);
             TreeVisualizationVM = new TreeVisualizationVM();
             ChatInformationVM = new ChatInformationVM();
 
@@ -75,7 +87,7 @@ namespace TreeChat.ViewModels
         }
 
         /// <summary>
-        /// 当文件被创建或打开时，构建对应的节点 VM 树
+        /// 当文件被创建或打开时，构建对应的节点 VM 树并启动自动保存
         /// </summary>
         private void OnFileCreatedOrOpened(ChatTree tree)
         {
@@ -89,6 +101,51 @@ namespace TreeChat.ViewModels
 
             // 自动切换到树视图
             ActiveView = ActiveViewType.TreeView;
+
+            // 启动自动保存定时器
+            StartAutoSave();
+        }
+
+        /// <summary>
+        /// 手动保存（Ctrl+S 调用）
+        /// </summary>
+        public async Task SaveAsync()
+        {
+            if (CurrentChatTree != null)
+            {
+                await _fileService.SaveChatTreeAsync(CurrentChatTree);
+            }
+        }
+
+        /// <summary>
+        /// 启动自动保存定时器（10 分钟间隔）
+        /// </summary>
+        private void StartAutoSave()
+        {
+            _autoSaveTimer?.Stop();
+            _autoSaveTimer = new DispatcherTimer { Interval = AutoSaveInterval };
+            _autoSaveTimer.Tick += async (s, e) => await TryAutoSaveAsync();
+            _autoSaveTimer.Start();
+        }
+
+        /// <summary>
+        /// 尝试自动保存（仅在有未保存修改且有文件路径时执行）
+        /// </summary>
+        private async Task TryAutoSaveAsync()
+        {
+            if (CurrentChatTree?.IsModified == true && CurrentChatTree?.FilePath != null)
+            {
+                await _fileService.SaveChatTreeAsync(CurrentChatTree);
+            }
+        }
+
+        /// <summary>
+        /// 停止自动保存定时器（窗口关闭时调用）
+        /// </summary>
+        public void StopAutoSave()
+        {
+            _autoSaveTimer?.Stop();
+            _autoSaveTimer = null;
         }
     }
 }

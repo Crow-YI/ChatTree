@@ -6,6 +6,14 @@
         xmlns:local="clr-namespace:TreeChat.Views"
         Title="树形AI聊天工具" Height="800" Width="1200"
         Background="{StaticResource WindowBackground}">
+    <Window.CommandBindings>
+        <CommandBinding Command="ApplicationCommands.Save"
+                        Executed="SaveCommand_Executed"
+                        CanExecute="SaveCommand_CanExecute" />
+    </Window.CommandBindings>
+    <Window.InputBindings>
+        <KeyBinding Key="S" Modifiers="Control" Command="ApplicationCommands.Save" />
+    </Window.InputBindings>
     <Window.Resources>
         <!-- 侧边栏按钮样式：覆盖全局 Button 样式 -->
         <Style x:Key="SidebarButtonStyle" TargetType="Button" BasedOn="{x:Null}">

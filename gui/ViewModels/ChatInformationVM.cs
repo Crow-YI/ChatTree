@@ -131,6 +131,7 @@ namespace TreeChat.ViewModels
                 int newNodeId = CurrentChatTree.GetNextNodeId();
                 ChatTreeNode newNode = new ChatTreeNode(SelectedNode.Node, InputMessage, newNodeId);
                 newNodeVM = SelectedNode.AddChild(newNode);
+                CurrentChatTree.IsModified = true;  // 标记未保存更改
                 ChatTreeChanged?.Invoke(SelectedNode, newNodeVM);
                 SelectedNode = newNodeVM;
                 AIReply = "";
@@ -184,6 +185,7 @@ namespace TreeChat.ViewModels
                                     if (done?.ReplyMessage != null)
                                     {
                                         SelectedNode.Node.SetAiReply(done.ReplyMessage.Content);
+                                        CurrentChatTree.IsModified = true;  // 标记未保存更改
                                     }
                                     // 触发树更新
                                     ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);

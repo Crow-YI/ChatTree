@@ -1,15 +1,21 @@
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
+using TreeChat.Services;
 using TreeChat.ViewModels;
 
 namespace TreeChat.Views
 {
     public partial class MainWindow : Window
     {
-        private readonly MainWindowVM _vm = new();
+        private readonly MainWindowVM _vm;
         private string? _initialFilePath;
 
         public MainWindow()
         {
+            var fileService = new FileService();
+            _vm = new MainWindowVM(fileService);
+
             InitializeComponent();
             DataContext = _vm;
 
@@ -56,6 +62,48 @@ namespace TreeChat.Views
             {
                 _vm.FileViewVM.LoadFromPath(filePath);
             }
+        }
+
+        // ==================== 保存命令 ====================
+
+        private void SaveCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
+        {
+            e.CanExecute = _vm.CurrentChatTree != null;
+        }
+
+        private async void SaveCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            await _vm.SaveAsync();
+        }
+
+        // ==================== 窗口关闭 ====================
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            if (_vm.CurrentChatTree?.IsModified == true)
+            {
+                var result = MessageBox.Show(
+                    "当前对话有未保存的更改，是否保存？",
+                    "提示",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    // 关闭时同步等待保存完成（写入量极小，毫秒级）
+                    _vm.SaveAsync().GetAwaiter().GetResult();
+                }
+                else if (result == MessageBoxResult.Cancel)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
+            // 停止自动保存定时器
+            _vm.StopAutoSave();
+
+            base.OnClosing(e);
         }
     }
 }

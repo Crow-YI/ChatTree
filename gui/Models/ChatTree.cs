@@ -54,6 +54,21 @@ namespace TreeChat.Models
         }
 
         /// <summary>
+        /// 创建时间
+        /// </summary>
+        public DateTime CreatedTime { get; set; } = DateTime.Now;
+
+        /// <summary>
+        /// 关联的 .chat 文件路径（null 表示尚未保存）
+        /// </summary>
+        public string? FilePath { get; set; }
+
+        /// <summary>
+        /// 是否有未保存的更改
+        /// </summary>
+        public bool IsModified { get; set; } = true;
+
+        /// <summary>
         /// 系统提示词（存储在树层级，不在根节点中）
         /// </summary>
         public string SystemPrompt { get; set; } = "你是一个有帮助的AI助手。";

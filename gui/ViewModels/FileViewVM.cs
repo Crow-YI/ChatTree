@@ -34,16 +34,16 @@ namespace TreeChat.ViewModels
         /// </summary>
         public event Action<ChatTree>? FileCreatedOrOpened;
 
-        public FileViewVM()
+        public FileViewVM(IFileService fileService)
         {
-            _fileService = new FileService();
+            _fileService = fileService;
 
             CreateNewFile = new RelayCommand(ExecuteCreateNewFile);
             OpenExistingFile = new RelayCommand(ExecuteOpenExistingFile);
         }
 
         /// <summary>
-        /// 执行创建新文件
+        /// 执行创建新文件：弹出创建对话框 → 保存到文件 → 触发事件
         /// </summary>
         private void ExecuteCreateNewFile(object? parameter)
         {
@@ -51,7 +51,7 @@ namespace TreeChat.ViewModels
             if (dialog.ShowDialog() == true)
             {
                 string treeTitle = string.IsNullOrWhiteSpace(dialog.TreeTitle)
-                    ? "新对话"
+                    ? "未命名对话"
                     : dialog.TreeTitle;
 
                 string systemPrompt = dialog.SystemPrompt;
@@ -59,27 +59,32 @@ namespace TreeChat.ViewModels
                 ChatTree newTree = new ChatTree(systemPrompt);
                 newTree.TreeTitle = treeTitle;
 
+                // 立即保存到文件（弹出 Save As 对话框）
+                if (!_fileService.SaveChatTreeAs(newTree))
+                    return;  // 用户取消 → 不创建
+
+                // 尝试注册到后端
+                TryRegisterBackend(newTree).ConfigureAwait(false);
+
                 FileCreatedOrOpened?.Invoke(newTree);
             }
         }
 
         /// <summary>
-        /// 执行打开现有文件
+        /// 执行打开现有文件：由 IFileService 处理对话框和路径
         /// </summary>
         private async void ExecuteOpenExistingFile(object? parameter)
         {
             try
             {
-                var dialog = new Microsoft.Win32.OpenFileDialog
-                {
-                    Filter = "聊天文件 (*.chat)|*.chat|所有文件 (*.*)|*.*",
-                    DefaultExt = ".chat",
-                    Title = "打开对话"
-                };
-                if (dialog.ShowDialog() == true)
-                {
-                    await LoadFromPathInternal(dialog.FileName);
-                }
+                var chatTree = _fileService.LoadChatTree();
+                if (chatTree == null)
+                    return;
+
+                // 尝试注册到后端
+                await TryRegisterBackend(chatTree);
+
+                FileCreatedOrOpened?.Invoke(chatTree);
             }
             catch (Exception ex)
             {
@@ -95,7 +100,13 @@ namespace TreeChat.ViewModels
         {
             try
             {
-                await LoadFromPathInternal(filePath);
+                var chatTree = _fileService.LoadChatTree(filePath);
+                if (chatTree == null)
+                    return;
+
+                await TryRegisterBackend(chatTree);
+
+                FileCreatedOrOpened?.Invoke(chatTree);
             }
             catch (Exception ex)
             {
@@ -105,73 +116,18 @@ namespace TreeChat.ViewModels
         }
 
         /// <summary>
-        /// 内部加载逻辑：优先使用 Python 后端反序列化，失败时回退到本地
+        /// 尝试将树注册到 Python 后端（失败不影响本地使用）
         /// </summary>
-        private async Task LoadFromPathInternal(string filePath)
+        private static async Task TryRegisterBackend(ChatTree chatTree)
         {
-            var json = File.ReadAllText(filePath);
-            string title = Path.GetFileNameWithoutExtension(filePath);
-
             try
             {
-                var treeResponse = await App.Backend.DeserializeTreeAsync(json, title);
-                var loadedTree = ConvertToLocalTree(treeResponse);
-                loadedTree.TreeTitle = title;
-                FileCreatedOrOpened?.Invoke(loadedTree);
-                return;
+                var json = File.ReadAllText(chatTree.FilePath!);
+                await App.Backend.DeserializeTreeAsync(json, chatTree.TreeTitle);
             }
             catch
             {
-                // Python 不可用时回退到本地反序列化
-            }
-
-            // 回退：使用本地加载
-            var fallbackTree = _fileService.LoadChatTree(filePath);
-            if (fallbackTree != null)
-            {
-                FileCreatedOrOpened?.Invoke(fallbackTree);
-            }
-        }
-
-        /// <summary>
-        /// 将 Python API 的 TreeNodeData 结构转换为本地 ChatTree 模型
-        /// </summary>
-        private static ChatTree ConvertToLocalTree(Models.TreeDetailResponse response)
-        {
-            var tree = new ChatTree();
-            tree.TreeId = response.TreeId;
-            tree.TreeTitle = response.Title;
-            tree.SystemPrompt = response.SystemPrompt;
-
-            if (response.RootNode != null)
-            {
-                var rootNode = new ChatTreeNode(null, response.RootNode.UserMessage?.Content ?? "", response.RootNode.NodeId);
-                tree.SetRootNode(rootNode);
-                ConvertChildren(rootNode, response.RootNode.Children);
-            }
-
-            return tree;
-        }
-
-        private static void ConvertChildren(ChatTreeNode parent, List<Models.TreeNodeData> children)
-        {
-            foreach (var childData in children)
-            {
-                var node = new ChatTreeNode(
-                    parent,
-                    childData.UserMessage?.Content ?? "",
-                    childData.NodeId);
-
-                if (childData.ReplyMessage != null)
-                {
-                    node.SetAiReply(childData.ReplyMessage.Content);
-                }
-
-                if (childData.Name != null)
-                    node.Name = childData.Name;
-
-                parent.ChildNodes.Add(node);
-                ConvertChildren(node, childData.Children);
+                // 后端不可用不影响本地使用
             }
         }
     }

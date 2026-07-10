@@ -6,7 +6,8 @@ using TreeChat.Models;
 namespace TreeChat.Services
 {
     /// <summary>
-    /// 文件服务实现类，处理对话树的文件保存和读取操作
+    /// 文件服务实现类，处理对话树的文件保存和读取操作。
+    /// 支持静默保存（FilePath 已设置时）和 Save As 对话框两种模式。
     /// </summary>
     public class FileService : IFileService
     {
@@ -14,21 +15,29 @@ namespace TreeChat.Services
         private const string FileExtension = ".chat";
         private const string FileFilter = "聊天文件 (*.chat)|*.chat|所有文件 (*.*)|*.*";
 
-        /// <summary>
-        /// 构造函数，初始化序列化服务
-        /// </summary>
         public FileService()
         {
             _serializationService = new JsonSerializationService();
         }
 
+        // ==================== 保存（同步） ====================
+
         /// <summary>
-        /// 保存对话树到用户指定的文件
-        /// 显示保存对话框让用户选择保存位置和文件名
+        /// 保存到 chatTree.FilePath。如果 FilePath 为 null，弹出 Save As 对话框。
+        /// 保存成功后设置 chatTree.IsModified = false。
         /// </summary>
-        /// <param name="chatTree">要保存的对话树</param>
-        /// <returns>是否保存成功</returns>
         public bool SaveChatTree(ChatTree chatTree)
+        {
+            if (chatTree.FilePath == null)
+                return SaveChatTreeAs(chatTree);  // 首次保存 → 弹出对话框
+
+            return SaveToPath(chatTree, chatTree.FilePath);
+        }
+
+        /// <summary>
+        /// 强制弹出 Save As 对话框。更新 chatTree.FilePath 和 chatTree.IsModified。
+        /// </summary>
+        public bool SaveChatTreeAs(ChatTree chatTree)
         {
             try
             {
@@ -40,28 +49,96 @@ namespace TreeChat.Services
                     Title = "保存对话"
                 };
 
-                if (dialog.ShowDialog() == true)
-                {
-                    var json = _serializationService.SerializeChatTree(chatTree);
-                    File.WriteAllText(dialog.FileName, json);
-                    return true;
-                }
+                if (dialog.ShowDialog() != true)
+                    return false;
 
-                return false;
+                return SaveToPath(chatTree, dialog.FileName);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"保存失败：{ex.Message}", "错误", 
+                MessageBox.Show($"保存失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
         }
 
         /// <summary>
-        /// 从用户选择的文件加载对话树
-        /// 显示打开对话框让用户选择要读取的文件
+        /// 内部：写入指定路径（同步）
         /// </summary>
-        /// <returns>加载的对话树，失败返回null</returns>
+        private bool SaveToPath(ChatTree chatTree, string filePath)
+        {
+            try
+            {
+                chatTree.FilePath = filePath;
+                var json = _serializationService.SerializeChatTree(chatTree);
+                File.WriteAllText(filePath, json);
+                chatTree.IsModified = false;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"保存失败：{ex.Message}", "错误",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
+
+        // ==================== 保存（异步） ====================
+
+        /// <summary>
+        /// 异步保存，不阻塞 UI 线程。
+        /// FilePath 为 null 时弹出 Save As 对话框（对话框必须在 UI 线程）。
+        /// </summary>
+        public async Task<bool> SaveChatTreeAsync(ChatTree chatTree)
+        {
+            if (chatTree.FilePath == null)
+            {
+                // 首次保存 → 同步弹出对话框（必须在 UI 线程）
+                return SaveChatTreeAs(chatTree);
+            }
+
+            return await SaveToPathAsync(chatTree, chatTree.FilePath);
+        }
+
+        /// <summary>
+        /// 异步强制弹出 Save As 对话框。
+        /// </summary>
+        public async Task<bool> SaveChatTreeAsAsync(ChatTree chatTree)
+        {
+            // 对话框必须在 UI 线程
+            if (!SaveChatTreeAs(chatTree))
+                return false;
+
+            // 对话框已设置 chatTree.FilePath，异步写入
+            return await SaveToPathAsync(chatTree, chatTree.FilePath!);
+        }
+
+        /// <summary>
+        /// 内部：异步写入指定路径
+        /// </summary>
+        private async Task<bool> SaveToPathAsync(ChatTree chatTree, string filePath)
+        {
+            try
+            {
+                chatTree.FilePath = filePath;
+                var json = _serializationService.SerializeChatTree(chatTree);
+                await File.WriteAllTextAsync(filePath, json);
+                chatTree.IsModified = false;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"保存失败：{ex.Message}", "错误",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
+
+        // ==================== 加载 ====================
+
+        /// <summary>
+        /// 打开对话框加载 .chat 文件。设置 chatTree.FilePath 为所选路径。
+        /// </summary>
         public ChatTree? LoadChatTree()
         {
             try
@@ -73,54 +150,44 @@ namespace TreeChat.Services
                     Title = "打开对话"
                 };
 
-                if (dialog.ShowDialog() == true)
-                {
-                    var json = File.ReadAllText(dialog.FileName);
-                    var chatTree = _serializationService.DeserializeChatTree(json);
-                    
-                    if (chatTree != null)
-                    {
-                        var fileName = Path.GetFileNameWithoutExtension(dialog.FileName);
-                        chatTree.TreeTitle = fileName;
-                    }
-                    
-                    return chatTree;
-                }
+                if (dialog.ShowDialog() != true)
+                    return null;
 
-                return null;
+                return LoadChatTree(dialog.FileName);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"读取失败：{ex.Message}", "错误", 
+                MessageBox.Show($"读取失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return null;
             }
         }
 
         /// <summary>
-        /// 从指定文件路径加载对话树
-        /// 不显示对话框，直接从指定路径读取文件
+        /// 从指定文件路径加载对话树。
+        /// 设置 chatTree.FilePath 和 chatTree.IsModified = false。
         /// </summary>
-        /// <param name="filePath">文件路径</param>
-        /// <returns>加载的对话树，失败返回null</returns>
         public ChatTree? LoadChatTree(string filePath)
         {
             try
             {
                 var json = File.ReadAllText(filePath);
                 var chatTree = _serializationService.DeserializeChatTree(json);
-                
+
                 if (chatTree != null)
                 {
+                    chatTree.FilePath = filePath;
+                    chatTree.IsModified = false;
+
                     var fileName = Path.GetFileNameWithoutExtension(filePath);
                     chatTree.TreeTitle = fileName;
                 }
-                
+
                 return chatTree;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"读取失败：{ex.Message}", "错误", 
+                MessageBox.Show($"读取失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return null;
             }

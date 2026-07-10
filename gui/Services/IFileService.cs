@@ -7,24 +7,42 @@ namespace TreeChat.Services
     /// </summary>
     public interface IFileService
     {
+        // ========== 保存（同步） ==========
+
         /// <summary>
-        /// 保存对话树到用户指定的文件
+        /// 保存到 chatTree.FilePath。如果 FilePath 为 null，弹出 Save As 对话框并设置。
+        /// 保存成功后设置 chatTree.IsModified = false。
         /// </summary>
-        /// <param name="chatTree">要保存的对话树</param>
-        /// <returns>是否保存成功</returns>
         bool SaveChatTree(ChatTree chatTree);
 
         /// <summary>
-        /// 从用户选择的文件加载对话树
+        /// 强制弹出 Save As 对话框。更新 chatTree.FilePath 和 chatTree.IsModified。
         /// </summary>
-        /// <returns>加载的对话树，失败返回null</returns>
+        bool SaveChatTreeAs(ChatTree chatTree);
+
+        // ========== 保存（异步） ==========
+
+        /// <summary>
+        /// 异步保存到 chatTree.FilePath，不阻塞 UI 线程。
+        /// FilePath 为 null 时弹出 Save As 对话框。
+        /// </summary>
+        Task<bool> SaveChatTreeAsync(ChatTree chatTree);
+
+        /// <summary>
+        /// 异步强制弹出 Save As 对话框。
+        /// </summary>
+        Task<bool> SaveChatTreeAsAsync(ChatTree chatTree);
+
+        // ========== 加载（同步，含模态对话框） ==========
+
+        /// <summary>
+        /// 打开对话框加载 .chat 文件。设置 chatTree.FilePath 为所选路径。
+        /// </summary>
         ChatTree? LoadChatTree();
 
         /// <summary>
-        /// 从指定文件路径加载对话树
+        /// 从指定路径加载 .chat 文件。设置 chatTree.FilePath 为该路径。
         /// </summary>
-        /// <param name="filePath">文件路径</param>
-        /// <returns>加载的对话树，失败返回null</returns>
         ChatTree? LoadChatTree(string filePath);
     }
 }
