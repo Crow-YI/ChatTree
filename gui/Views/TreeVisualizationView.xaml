@@ -16,14 +16,14 @@
         <!-- 工具栏 -->
         <Border Grid.Row="0" Background="#F8FAFE" BorderBrush="#E2E6EA" BorderThickness="0,0,0,1" Padding="10,8">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button Content="更改配置" Command="{Binding ShowConfigCommand}" Margin="0,0,10,0" Padding="10,5"/>
+                <Button Content="模型配置" Command="{Binding ShowConfigCommand}" Margin="0,0,10,0" Padding="10,5"/>
                 <TextBlock Text="节点名称:" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="#505E6C" FontSize="12"/>
                 <TextBox Text="{Binding SelectedNode.DisplayContent, Mode=OneWay}" Width="140" IsReadOnly="True" Margin="0,0,10,0"/>
                 <Button Content="修改名称" Command="{Binding RenameNodeCommand}" Padding="10,5"/>
             </StackPanel>
         </Border>
 
-        <!-- NodifyEditor 区域 -->
+        <!-- NodifyEditor 区域（仅当 IsFileLoaded==true 时显示） -->
         <nodify:NodifyEditor Grid.Row="1" x:Name="editor"
                               Background="White"
                               Decorators="{Binding Decorators}"
@@ -77,6 +77,33 @@
                 </DataTemplate>
             </nodify:NodifyEditor.ConnectionTemplate>
 
+            <!-- NodifyEditor 可见性绑定 -->
+            <nodify:NodifyEditor.Style>
+                <Style TargetType="nodify:NodifyEditor">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsFileLoaded}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </nodify:NodifyEditor.Style>
         </nodify:NodifyEditor>
+
+        <!-- 空状态提示（未加载文件时显示） -->
+        <TextBlock Grid.Row="1" Text="当前未打开文件" Foreground="#A0A0A0" FontSize="18"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   IsHitTestVisible="False">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Visible"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsFileLoaded}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
     </Grid>
-</UserControl>
+</UserControl>

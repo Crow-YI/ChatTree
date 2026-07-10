@@ -10,6 +10,16 @@ namespace TreeChat.ViewModels
 {
     public class TreeVisualizationVM : BaseViewModel
     {
+        /// <summary>
+        /// 当前是否已加载文件（控制空状态提示的显示）
+        /// </summary>
+        private bool _isFileLoaded;
+        public bool IsFileLoaded
+        {
+            get => _isFileLoaded;
+            private set => SetProperty(ref _isFileLoaded, value);
+        }
+
         // 根节点VM
         public TreeNodeVM? RootNode { get; private set; }
 
@@ -192,6 +202,7 @@ namespace TreeChat.ViewModels
             try
             {
                 RootNode = rootNode;
+                IsFileLoaded = true;
                 TreeLayoutService.LayoutTree(RootNode);
                 RebuildAll(RootNode);
                 SelectedNode = rootNode;
@@ -227,6 +238,20 @@ namespace TreeChat.ViewModels
                 SyncSelectedToNodify();
                 TreeRendered?.Invoke();
             }, System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// 清除当前树（用于关闭文件或重置状态）
+        /// </summary>
+        public void ClearTree()
+        {
+            RootNode = null;
+            Decorators.Clear();
+            Connections.Clear();
+            SelectedItems.Clear();
+            SelectedNode = null;
+            CurrentChatTree = null;
+            IsFileLoaded = false;
         }
 
         /// <summary>
