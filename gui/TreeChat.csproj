@@ -6,10 +6,16 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\ChatTree.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MdXaml" Version="1.27.0" />
     <PackageReference Include="Nodify" Version="6.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\ChatTree.ico" />
   </ItemGroup>
 
 </Project>

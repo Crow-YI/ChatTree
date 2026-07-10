@@ -14,6 +14,7 @@ namespace TreeChat.ViewModels
         private string? _aiReply;
         private string? _systemPrompt;
         private bool _isRootSelected;
+        private bool _isStreaming;
 
         public string? UserMessage
         {
@@ -50,7 +51,13 @@ namespace TreeChat.ViewModels
             set => SetProperty(ref _isRootSelected, value);
         }
 
-        private string _inputMessage;
+        public bool IsStreaming
+        {
+            get => _isStreaming;
+            private set => SetProperty(ref _isStreaming, value);
+        }
+
+        private string _inputMessage = string.Empty;
         public string InputMessage
         {
             get => _inputMessage;
@@ -137,6 +144,7 @@ namespace TreeChat.ViewModels
                 AIReply = "";
                 var message = InputMessage;
                 InputMessage = string.Empty;
+                IsStreaming = true;
 
                 // 通过 Python 后端发送（流式）
                 // 首次发送时自动在 Python 端创建对话树
@@ -185,9 +193,11 @@ namespace TreeChat.ViewModels
                                     if (done?.ReplyMessage != null)
                                     {
                                         SelectedNode.Node.SetAiReply(done.ReplyMessage.Content);
+                                        AIReply = done.ReplyMessage.Content;
                                         CurrentChatTree.IsModified = true;  // 标记未保存更改
                                     }
                                     // 触发树更新
+                                    IsStreaming = false;
                                     ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
                                 });
                                 return;
@@ -201,6 +211,7 @@ namespace TreeChat.ViewModels
                                     SelectedNode = previousSelected;
                                     ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
                                     AIReply = string.Empty;
+                                    IsStreaming = false;
                                     MessageBox.Show(
                                         error?.Message ?? "AI 调用失败。",
                                         "错误", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -234,6 +245,10 @@ namespace TreeChat.ViewModels
                 AIReply = string.Empty;
                 MessageBox.Show($"请求过程中发生错误：{ex.Message}",
                     "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsStreaming = false;
             }
         }
     }
