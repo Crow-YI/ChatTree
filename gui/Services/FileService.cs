@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using Microsoft.Win32;
+using TreeChat.Infrastructure;
 using TreeChat.Models;
 
 namespace TreeChat.Services
@@ -50,12 +51,16 @@ namespace TreeChat.Services
                 };
 
                 if (dialog.ShowDialog() != true)
+                {
+                    AppLogger.Debug("Save cancelled by user");
                     return false;
+                }
 
                 return SaveToPath(chatTree, dialog.FileName);
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Save As failed");
                 MessageBox.Show($"保存失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
@@ -73,10 +78,12 @@ namespace TreeChat.Services
                 var json = _serializationService.SerializeChatTree(chatTree);
                 File.WriteAllText(filePath, json);
                 chatTree.IsModified = false;
+                AppLogger.Info("Chat saved: {Path}", filePath);
                 return true;
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Save failed: {Path}", filePath);
                 MessageBox.Show($"保存失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
@@ -124,10 +131,12 @@ namespace TreeChat.Services
                 var json = _serializationService.SerializeChatTree(chatTree);
                 await File.WriteAllTextAsync(filePath, json);
                 chatTree.IsModified = false;
+                AppLogger.Info("Chat saved (async): {Path}", filePath);
                 return true;
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Save failed (async): {Path}", filePath);
                 MessageBox.Show($"保存失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
@@ -151,12 +160,16 @@ namespace TreeChat.Services
                 };
 
                 if (dialog.ShowDialog() != true)
+                {
+                    AppLogger.Debug("Open cancelled by user");
                     return null;
+                }
 
                 return LoadChatTree(dialog.FileName);
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Open dialog failed");
                 MessageBox.Show($"读取失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return null;
@@ -183,10 +196,12 @@ namespace TreeChat.Services
                     chatTree.TreeTitle = fileName;
                 }
 
+                AppLogger.Info("Chat loaded: {Path}", filePath);
                 return chatTree;
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Load failed: {Path}", filePath);
                 MessageBox.Show($"读取失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return null;

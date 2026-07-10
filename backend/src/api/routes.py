@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import signal
 from collections.abc import AsyncGenerator
@@ -44,6 +45,7 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/api/v1")
+logger = logging.getLogger(__name__)
 
 
 # === Exception Handlers (registered in main.py) ===
@@ -53,6 +55,10 @@ async def treechat_error_handler(request: Request, exc: TreeChatError) -> JSONRe
     status_code: int = 500
     if isinstance(exc, TreeNotFoundError) or isinstance(exc, NodeNotFoundError):
         status_code = 404
+    logger.error(
+        "TreeChatError: %s | path=%s | status=%d",
+        exc, request.url.path, status_code, exc_info=True,
+    )
     content = json.dumps({
         "success": False,
         "error": {
@@ -67,6 +73,10 @@ async def treechat_error_handler(request: Request, exc: TreeChatError) -> JSONRe
 
 async def llm_error_handler(request: Request, exc: LLMError) -> JSONResponse:
     """LLM 错误响应格式。"""
+    logger.error(
+        "LLMError: [%s] %s | path=%s | detail=%s",
+        exc.key, exc.message, request.url.path, exc.detail,
+    )
     content = json.dumps({
         "success": False,
         "error": {
@@ -81,6 +91,7 @@ async def llm_error_handler(request: Request, exc: LLMError) -> JSONResponse:
 
 async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """通用异常响应格式。"""
+    logger.exception("Unhandled exception: path=%s", request.url.path)
     content = json.dumps({
         "success": False,
         "error": {
@@ -199,6 +210,10 @@ async def chat(
 
     # 3. SSE 事件生成器
     async def event_generator() -> AsyncGenerator[dict[str, str], None]:
+        logger.info(
+            "SSE stream start: tree=%s parent_node=%d",
+            tree_id, req.parent_node_id,
+        )
         try:
             # 先发送 created 事件通知 WPF 新节点已创建
             created_data = json.dumps({
@@ -252,10 +267,12 @@ async def chat(
 
         except asyncio.CancelledError:
             # 客户端断开连接，不清理节点保留已收到的内容
+            logger.warning("SSE stream cancelled (client disconnected): tree=%s", tree_id)
             raise
 
         except Exception as e:
             # 未知错误 → 清理节点
+            logger.exception("SSE stream error: tree=%s", tree_id)
             try:
                 tm.delete_node(tree_id, child_node.node_id)
             except Exception:
@@ -267,6 +284,9 @@ async def chat(
                 "status_code": 500,
             }, ensure_ascii=False)
             yield {"event": "error", "data": error_data}
+
+        finally:
+            logger.info("SSE stream end: tree=%s", tree_id)
 
     return EventSourceResponse(event_generator())
 

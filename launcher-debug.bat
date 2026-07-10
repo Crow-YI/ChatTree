@@ -1,15 +1,17 @@
 @echo off
 chcp 65001 >nul
 REM ============================================================
-REM  TreeChat v2.0 — 无控制台启动器（NORMAL 日志模式）
-REM  双击此文件即可启动全部服务
+REM  TreeChat v2.0 — 调试模式启动器
+REM  双击此文件以 DEBUG 模式启动全部服务（前后端均输出详细日志）
+REM  日志目录: logs/
+REM  日志保留: 7 天（自动清理）
 REM ============================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 echo.
-echo    TreeChat v2.0 正在启动...
-echo    ============================
+echo    TreeChat v2.0 正在启动（DEBUG 模式）
+echo    =====================================
 echo.
 
 REM 0. 查找 uv 可执行文件
@@ -36,9 +38,10 @@ if %ERRORLEVEL% EQU 0 (
     goto :launch_gui
 )
 
-REM 2. 启动 Python 后端（隐藏窗口）
-echo    [..] 正在启动 Python 后端...
-start "TreeChat-Backend" /MIN cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn src.main:app --host 127.0.0.1 --port 8800"
+REM 2. 启动 Python 后端（DEBUG 级别日志，隐藏窗口）
+echo    [..] 正在启动 Python 后端（DEBUG 模式）...
+REM --log-level DEBUG 告知后端输出 DEBUG 级别日志
+start "TreeChat-Backend" /MIN cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn src.main:app --host 127.0.0.1 --port 8800 --log-level DEBUG"
 
 REM 3. 等待后端就绪（最多 20 秒）
 set /a RETRIES=0
@@ -57,9 +60,9 @@ echo    请检查 backend/.env 中的 API Key 是否已配置
 pause
 exit /b 1
 
-REM 4. 启动 WPF 前端
+REM 4. 启动 WPF 前端（DEBUG 模式）
 :launch_gui
-echo    [..] 正在启动 WPF 前端...
+echo    [..] 正在启动 WPF 前端（DEBUG 模式）...
 echo.
 cd /d "%~dp0gui"
 
@@ -76,14 +79,19 @@ if not exist "bin\Release\net8.0-windows\TreeChat.exe" (
     )
 )
 
-REM 优先运行 Release，其次 Debug
+REM 以 --debug 参数启动（前端日志切换为 DEBUG 级别）
 if exist "bin\Release\net8.0-windows\TreeChat.exe" (
-    start "TreeChat" "bin\Release\net8.0-windows\TreeChat.exe"
+    start "TreeChat (DEBUG)" "bin\Release\net8.0-windows\TreeChat.exe" --debug
 ) else (
-    start "TreeChat" dotnet run
+    start "TreeChat (DEBUG)" dotnet run -- --debug
 )
 
-echo    TreeChat 已启动！
+echo    TreeChat 已以 DEBUG 模式启动！
+echo.
+echo    日志路径: %~dp0logs\
+echo    日志文件:
+echo      后端: logs\treechat.log
+echo      前端: logs\treechat-YYYYMMDD.log
 echo.
 echo    按任意键关闭此窗口...
 pause >nul

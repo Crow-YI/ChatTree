@@ -27,4 +27,7 @@ gui/obj/
 BackendStructure.md
 FrontendStructure.md
 Plan.md
-CommitInfo.md
+CommitInfo.md
+
+# 日志文件
+logs/

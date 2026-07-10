@@ -7,12 +7,15 @@ Python 端只负责 JSON 的序列化与反序列化逻辑。
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from ..models.chat_tree import ChatTree
 from ..models.chat_tree_node import ChatTreeNode
 from ..models.chat_message import AIMessage, message_to_role, message_from_role
+
+logger = logging.getLogger(__name__)
 
 
 class FileService:
@@ -29,6 +32,7 @@ class FileService:
             "SystemPrompt": tree.system_prompt,
             "RootNode": self._serialize_node(tree.root_node),
         }
+        logger.info("Tree serialized: id=%s title=%s", tree.tree_id, tree.title)
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     def deserialize(self, json_str: str, title: str | None = None) -> ChatTree:
@@ -38,12 +42,14 @@ class FileService:
         root_data: dict[str, Any] = data.get("RootNode", {})
         root_node = self._deserialize_node(root_data, parent=None)
 
+        tree_title = title or data.get("TreeTitle", "已导入对话")
         tree = ChatTree(
-            title=title or data.get("TreeTitle", "已导入对话"),
+            title=tree_title,
             root_node=root_node,
             created_at=data.get("CreatedTime", datetime.now(timezone.utc).isoformat()),
             system_prompt=data.get("SystemPrompt", ""),
         )
+        logger.info("Tree deserialized: title=%s", tree_title)
         return tree
 
     def _serialize_node(self, node: ChatTreeNode) -> dict[str, object]:

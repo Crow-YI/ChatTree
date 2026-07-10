@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.Linq;
 using System.Windows;
 using TreeChat.Commands;
+using TreeChat.Infrastructure;
 using TreeChat.Models;
 using TreeChat.Services;
 
@@ -140,6 +141,8 @@ namespace TreeChat.ViewModels
                 string newName = dialog.NewName;
                 if (!string.IsNullOrWhiteSpace(newName))
                 {
+                    AppLogger.Info("Node renamed: tree={TreeId} node={NodeId} name={Name}",
+                        CurrentChatTree?.TreeId, SelectedNode.Node.NodeID, newName);
                     SelectedNode.Node.Name = newName;
 
                     // 同步到 Python 后端
@@ -170,6 +173,8 @@ namespace TreeChat.ViewModels
 
             if (dialog.ShowDialog() == true)
             {
+                AppLogger.Info("Config updated: model={Model} endpoint={Endpoint}",
+                    dialog.ModelName, dialog.ApiEndpoint);
                 ApiConfig.ApiKey = dialog.ApiKey;
                 ApiConfig.ApiEndpoint = dialog.ApiEndpoint;
                 ApiConfig.ModelName = dialog.ModelName;

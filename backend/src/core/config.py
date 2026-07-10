@@ -8,12 +8,15 @@
 """
 
 import json
+import logging
 import shutil
 from pathlib import Path
 
 from pydantic import BaseModel
 
 from ..core.errors import ConfigError
+
+logger = logging.getLogger(__name__)
 
 
 class LLMProviderConfig(BaseModel):
@@ -66,26 +69,38 @@ class Settings(BaseModel):
           max_tokens   → max_tokens
         """
         config_path = Path(__file__).resolve().parents[3] / "config.json"
+        logger.info("Loading config from: %s", config_path)
 
         if not config_path.exists():
+            logger.warning("config.json not found, attempting fallback")
             example_path = config_path.with_name("config.example.json")
             if example_path.exists():
                 shutil.copy(example_path, config_path)
+                logger.info("Copied config.example.json → config.json")
             else:
-                return  # 都缺失则使用代码默认值
+                logger.warning("config.example.json also missing, using code defaults")
+                return
 
         try:
             with open(config_path, encoding="utf-8") as f:
                 data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return  # 文件损坏或不可读时静默忽略
+        except json.JSONDecodeError:
+            logger.warning("config.json is malformed, using code defaults")
+            return
+        except OSError as e:
+            logger.warning("Cannot read config.json: %s, using code defaults", e)
+            return
 
         # 供应商相关字段（根据当前激活的供应商映射）
         provider = self.llm_provider
         if "api_key" in data:
             setattr(self, f"{provider}_api_key", data["api_key"])
+            # 日志中脱敏 API Key（仅保留末4位）
+            masked = data["api_key"][-4:].rjust(len(data["api_key"]), "*")
+            logger.info("API key loaded: %s (provider=%s)", masked, provider)
         if "api_endpoint" in data:
             setattr(self, f"{provider}_api_base", data["api_endpoint"])
+            logger.info("API endpoint: %s (provider=%s)", data["api_endpoint"], provider)
 
         # 直接映射字段
         for field in ("model", "temperature", "top_p", "max_tokens"):

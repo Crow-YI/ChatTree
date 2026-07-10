@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using TreeChat.Infrastructure;
 
 namespace TreeChat.Services
 {
@@ -17,6 +18,7 @@ namespace TreeChat.Services
         public static double Temperature = 0.7;
         public static double TopP = 0.8;
         public static int MaxTokens = 800;
+        public static bool EnableDebugLogging = false;
 
         // ---- 基础设施（不持久化到 config.json，使用代码默认值或自动检测）----
         public static string PythonBackendUrl = "http://127.0.0.1:8800";
@@ -89,6 +91,7 @@ namespace TreeChat.Services
             var path = ConfigFilePath;
             if (path == null || !File.Exists(path))
             {
+                AppLogger.Info("Config file not found: {Path}", path);
                 TryCopyFromExample(path);
                 if (path != null && !File.Exists(path))
                     SaveToFile(); // 兜底：用代码默认值创建
@@ -113,10 +116,19 @@ namespace TreeChat.Services
                     TopP = topP.GetDouble();
                 if (root.TryGetProperty("max_tokens", out var maxTokens))
                     MaxTokens = maxTokens.GetInt32();
+                if (root.TryGetProperty("debug_logging", out var debugLogging))
+                    EnableDebugLogging = debugLogging.GetBoolean();
+
+                // 日志中脱敏 API Key（仅保留末4位）
+                var masked = string.IsNullOrEmpty(ApiKey)
+                    ? "(empty)"
+                    : new string('*', ApiKey.Length - 4) + ApiKey[^4..];
+                AppLogger.Info("Config loaded from: {Path} (model={Model}, apiKey={ApiKey})",
+                    path, ModelName, masked);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"加载配置文件失败: {ex.Message}");
+                AppLogger.Warn(ex, "Failed to load config from {Path}", path);
             }
         }
 
@@ -136,11 +148,11 @@ namespace TreeChat.Services
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
                 File.Copy(examplePath, configPath, overwrite: false);
-                System.Diagnostics.Debug.WriteLine("已从 config.example.json 初始化 config.json");
+                AppLogger.Info("Initialized config.json from config.example.json");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"从 example 复制配置文件失败: {ex.Message}");
+                AppLogger.Warn(ex, "Failed to copy config.example.json");
             }
         }
 
@@ -162,6 +174,7 @@ namespace TreeChat.Services
                     temperature = Temperature,
                     top_p = TopP,
                     max_tokens = MaxTokens,
+                    debug_logging = EnableDebugLogging,
                 };
 
                 string json = JsonSerializer.Serialize(data, JsonOptions);
@@ -169,10 +182,11 @@ namespace TreeChat.Services
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
                 File.WriteAllText(path, json);
+                AppLogger.Info("Config saved to: {Path}", path);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"保存配置文件失败: {ex.Message}");
+                AppLogger.Warn(ex, "Failed to save config to {Path}", path);
             }
         }
     }
