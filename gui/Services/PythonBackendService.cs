@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using TreeChat.Infrastructure;
 using TreeChat.Models;
 
 namespace TreeChat.Services
@@ -140,6 +141,7 @@ namespace TreeChat.Services
             // 标记启动中，防止 ProcessExited 在启动阶段误报
             _isStartingUp = true;
 
+            AppLogger.Info("Starting backend process: uv={UvPath} dir={WorkingDir}", uvPath, _pyProjectDir);
             _pythonProcess.Start();
 
             // 等待 health check（首次 uv 安装依赖可能较慢，最多 60 秒）
@@ -151,6 +153,9 @@ namespace TreeChat.Services
                     _isStartingUp = false;
                     var stderr = await _pythonProcess.StandardError.ReadToEndAsync();
                     var stdout = await _pythonProcess.StandardOutput.ReadToEndAsync();
+                    AppLogger.Error(
+                        "Backend process exited during startup (code={ExitCode}): {StdErr}",
+                        _pythonProcess.ExitCode, stderr);
                     throw new InvalidOperationException(
                         $"Python 进程意外退出 (exit code: {_pythonProcess.ExitCode})。\n" +
                         $"uv: {uvPath}\n" +
@@ -162,6 +167,7 @@ namespace TreeChat.Services
                 if (await HealthCheckAsync())
                 {
                     _isStartingUp = false;
+                    AppLogger.Info("Backend started in {Elapsed}ms", sw.ElapsedMilliseconds);
                     return true;
                 }
 
@@ -169,6 +175,7 @@ namespace TreeChat.Services
             }
 
             _isStartingUp = false;
+            AppLogger.Error("Backend start timed out after 60s");
             throw new TimeoutException("Python 后端启动超时（60秒）。首次运行可能较慢，请稍后重试。");
         }
 
@@ -181,7 +188,7 @@ namespace TreeChat.Services
             try
             {
                 await PostAsync<ApiSuccessResponse>("/api/v1/shutdown");
-                System.Diagnostics.Debug.WriteLine("已通过 shutdown 请求清理残留后端。");
+                AppLogger.Info("Sent shutdown request to existing backend");
                 await Task.Delay(1000);
                 return;
             }
@@ -216,7 +223,7 @@ namespace TreeChat.Services
                             try
                             {
                                 Process.GetProcessById(pid).Kill();
-                                System.Diagnostics.Debug.WriteLine($"已强制终止占用 8800 端口的进程 (PID {pid})。");
+                                AppLogger.Info("Force-killed process on port 8800 (PID={Pid})", pid);
                                 await Task.Delay(500);
                             }
                             catch { /* 进程可能已结束或权限不足 */ }
@@ -226,7 +233,7 @@ namespace TreeChat.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"清理 8800 端口失败: {ex.Message}");
+                AppLogger.Warn(ex, "Failed to clean up port 8800");
             }
         }
 
@@ -244,8 +251,9 @@ namespace TreeChat.Services
             }
             catch { /* stderr 可能已被消费 */ }
 
-            System.Diagnostics.Debug.WriteLine(
-                $"Python 后端进程退出 (exit code: {exitCode})。stderr: {stderr}");
+            AppLogger.Warn(
+                "Backend process exited (code={ExitCode}): {StdErr}",
+                exitCode, stderr);
 
             // 启动阶段的退出由 StartAsync 的轮询逻辑处理，不重复通知
             if (!_isStartingUp)
@@ -268,11 +276,12 @@ namespace TreeChat.Services
         /// </summary>
         public async Task<bool> TryRestartAsync(CancellationToken ct = default)
         {
+            AppLogger.Info("Attempting backend restart...");
             try { await StopAsync(); } catch { }
             try { return await StartAsync(ct); }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"重启后端失败: {ex.Message}");
+                AppLogger.Error(ex, "Backend restart failed");
                 return false;
             }
         }
@@ -286,6 +295,7 @@ namespace TreeChat.Services
             try
             {
                 await PostAsync<ApiSuccessResponse>("/api/v1/shutdown");
+                AppLogger.Info("Shutdown request sent to backend");
             }
             catch
             {
@@ -382,6 +392,7 @@ namespace TreeChat.Services
 
         public Task<TreeDetailResponse> CreateTreeAsync(string title, string systemPrompt)
         {
+            AppLogger.Debug("CreateTree: title={Title}", title);
             return PostAsync<TreeDetailResponse>("/api/v1/trees",
                 new CreateTreeRequest { Title = title, SystemPrompt = systemPrompt });
         }
@@ -393,16 +404,19 @@ namespace TreeChat.Services
 
         public Task<TreeDetailResponse> GetTreeAsync(string treeId)
         {
+            AppLogger.Debug("GetTree: id={TreeId}", treeId);
             return GetAsync<TreeDetailResponse>($"/api/v1/trees/{treeId}")!;
         }
 
         public Task<ApiSuccessResponse> DeleteTreeAsync(string treeId)
         {
+            AppLogger.Info("DeleteTree: id={TreeId}", treeId);
             return DeleteAsync<ApiSuccessResponse>($"/api/v1/trees/{treeId}");
         }
 
         public Task<ApiSuccessResponse> RenameTreeAsync(string treeId, string newTitle)
         {
+            AppLogger.Info("RenameTree: id={TreeId} title={Title}", treeId, newTitle);
             return PutAsync<ApiSuccessResponse>($"/api/v1/trees/{treeId}",
                 new RenameTreeRequest { Title = newTitle });
         }
@@ -430,6 +444,8 @@ namespace TreeChat.Services
                 requestBody.TopP = config.TopP;
                 requestBody.MaxTokens = config.MaxTokens;
             }
+
+            AppLogger.Info("ChatStream start: tree={TreeId} parent={ParentId}", treeId, parentNodeId);
 
             var json = JsonSerializer.Serialize(requestBody, _jsonOptions);
             var request = new HttpRequestMessage(HttpMethod.Post,
@@ -473,12 +489,14 @@ namespace TreeChat.Services
 
         public Task<ApiSuccessResponse> RenameNodeAsync(string treeId, int nodeId, string name)
         {
+            AppLogger.Info("RenameNode: tree={TreeId} node={NodeId} name={Name}", treeId, nodeId, name);
             return PutAsync<ApiSuccessResponse>($"/api/v1/trees/{treeId}/nodes/{nodeId}",
                 new RenameNodeRequest { Name = name });
         }
 
         public Task<ApiSuccessResponse> DeleteNodeAsync(string treeId, int nodeId)
         {
+            AppLogger.Info("DeleteNode: tree={TreeId} node={NodeId}", treeId, nodeId);
             return DeleteAsync<ApiSuccessResponse>($"/api/v1/trees/{treeId}/nodes/{nodeId}");
         }
 
@@ -491,6 +509,7 @@ namespace TreeChat.Services
 
         public Task<ApiSuccessResponse> PushConfigAsync(ChatConfigData config)
         {
+            AppLogger.Debug("PushConfig: model={Model}", config.Model);
             return PutAsync<ApiSuccessResponse>("/api/v1/config", config);
         }
 
@@ -498,11 +517,13 @@ namespace TreeChat.Services
 
         public Task<SerializeResponse> SerializeTreeAsync(string treeId)
         {
+            AppLogger.Debug("SerializeTree: id={TreeId}", treeId);
             return GetAsync<SerializeResponse>($"/api/v1/trees/{treeId}/serialize")!;
         }
 
         public Task<TreeDetailResponse> DeserializeTreeAsync(string jsonContent, string? title = null)
         {
+            AppLogger.Info("DeserializeTree: title={Title}", title);
             return PostAsync<TreeDetailResponse>("/api/v1/trees/deserialize",
                 new DeserializeRequest { JsonContent = jsonContent, Title = title });
         }
@@ -511,40 +532,96 @@ namespace TreeChat.Services
 
         private async Task<T> GetAsync<T>(string path) where T : class
         {
-            var response = await _httpClient.GetAsync($"{_baseUrl}{path}");
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<T>(json, _jsonOptions)!;
+            AppLogger.Debug("GET {Path}", path);
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                var response = await _httpClient.GetAsync($"{_baseUrl}{path}");
+                sw.Stop();
+                AppLogger.Debug("GET {Path} → {Status} in {Elapsed}ms",
+                    path, (int)response.StatusCode, sw.ElapsedMilliseconds);
+                response.EnsureSuccessStatusCode();
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<T>(json, _jsonOptions)!;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                AppLogger.Error(ex, "GET {Path} failed after {Elapsed}ms", path, sw.ElapsedMilliseconds);
+                throw;
+            }
         }
 
         private async Task<T> PostAsync<T>(string path, object? body = null) where T : class
         {
-            var content = body != null
-                ? new StringContent(JsonSerializer.Serialize(body, _jsonOptions),
-                    Encoding.UTF8, "application/json")
-                : null;
-            var response = await _httpClient.PostAsync($"{_baseUrl}{path}", content);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<T>(json, _jsonOptions)!;
+            AppLogger.Debug("POST {Path}", path);
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                var content = body != null
+                    ? new StringContent(JsonSerializer.Serialize(body, _jsonOptions),
+                        Encoding.UTF8, "application/json")
+                    : null;
+                var response = await _httpClient.PostAsync($"{_baseUrl}{path}", content);
+                sw.Stop();
+                AppLogger.Debug("POST {Path} → {Status} in {Elapsed}ms",
+                    path, (int)response.StatusCode, sw.ElapsedMilliseconds);
+                response.EnsureSuccessStatusCode();
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<T>(json, _jsonOptions)!;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                AppLogger.Error(ex, "POST {Path} failed after {Elapsed}ms", path, sw.ElapsedMilliseconds);
+                throw;
+            }
         }
 
         private async Task<T> PutAsync<T>(string path, object body) where T : class
         {
-            var content = new StringContent(JsonSerializer.Serialize(body, _jsonOptions),
-                Encoding.UTF8, "application/json");
-            var response = await _httpClient.PutAsync($"{_baseUrl}{path}", content);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<T>(json, _jsonOptions)!;
+            AppLogger.Debug("PUT {Path}", path);
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                var content = new StringContent(JsonSerializer.Serialize(body, _jsonOptions),
+                    Encoding.UTF8, "application/json");
+                var response = await _httpClient.PutAsync($"{_baseUrl}{path}", content);
+                sw.Stop();
+                AppLogger.Debug("PUT {Path} → {Status} in {Elapsed}ms",
+                    path, (int)response.StatusCode, sw.ElapsedMilliseconds);
+                response.EnsureSuccessStatusCode();
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<T>(json, _jsonOptions)!;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                AppLogger.Error(ex, "PUT {Path} failed after {Elapsed}ms", path, sw.ElapsedMilliseconds);
+                throw;
+            }
         }
 
         private async Task<T> DeleteAsync<T>(string path) where T : class
         {
-            var response = await _httpClient.DeleteAsync($"{_baseUrl}{path}");
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<T>(json, _jsonOptions)!;
+            AppLogger.Debug("DELETE {Path}", path);
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                var response = await _httpClient.DeleteAsync($"{_baseUrl}{path}");
+                sw.Stop();
+                AppLogger.Debug("DELETE {Path} → {Status} in {Elapsed}ms",
+                    path, (int)response.StatusCode, sw.ElapsedMilliseconds);
+                response.EnsureSuccessStatusCode();
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<T>(json, _jsonOptions)!;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                AppLogger.Error(ex, "DELETE {Path} failed after {Elapsed}ms", path, sw.ElapsedMilliseconds);
+                throw;
+            }
         }
 
         public void Dispose()

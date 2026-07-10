@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Windows;
 using TreeChat.Commands;
+using TreeChat.Infrastructure;
 using TreeChat.Models;
 
 namespace TreeChat.ViewModels
@@ -132,6 +133,9 @@ namespace TreeChat.ViewModels
             // 最多尝试 2 次（含首次 + 一次自动重试）
             for (int attempt = 1; attempt <= 2; attempt++)
             {
+                AppLogger.Info(
+                    "Chat message sending: tree={TreeId} parent={ParentId} attempt={Attempt}",
+                    CurrentChatTree?.TreeId, SelectedNode.Node.NodeID, attempt);
                 try
                 {
                     // 乐观 UI 更新：先创建本地临时节点（使用树内计数器获取 ID）
@@ -190,6 +194,9 @@ namespace TreeChat.ViewModels
 
                                 case "done":
                                     var done = System.Text.Json.JsonSerializer.Deserialize<Models.SseDoneEvent>(sseEvent.Data);
+                                    AppLogger.Info(
+                                        "Chat message done: tree={TreeId} node={NodeId}",
+                                        CurrentChatTree?.TreeId, done?.NodeId);
                                     await Application.Current.Dispatcher.InvokeAsync(() =>
                                     {
                                         if (done?.ReplyMessage != null)
@@ -204,6 +211,9 @@ namespace TreeChat.ViewModels
 
                                 case "error":
                                     var error = System.Text.Json.JsonSerializer.Deserialize<Models.SseErrorEvent>(sseEvent.Data);
+                                    AppLogger.Warn(
+                                        "SSE error event: key={Key} message={Message} detail={Detail}",
+                                        error?.Key, error?.Message, error?.Detail);
                                     await Application.Current.Dispatcher.InvokeAsync(() =>
                                     {
                                         // 失败清理
@@ -236,21 +246,24 @@ namespace TreeChat.ViewModels
                     // 第一次失败时尝试重启后端
                     if (attempt == 1)
                     {
-                        System.Diagnostics.Debug.WriteLine("后端连接失败，尝试重启...");
+                        AppLogger.Warn("Backend connection failed, attempting restart...");
                         var restarted = await App.Backend.TryRestartAsync();
                         if (restarted)
                         {
-                            System.Diagnostics.Debug.WriteLine("后端重启成功，自动重试...");
+                            AppLogger.Info("Backend restarted, retrying chat...");
                             continue; // 重试
                         }
                     }
 
+                    AppLogger.Error(ex, "Chat failed after retry");
                     MessageBox.Show($"无法连接到 Python 后端服务。\n\n{ex.Message}",
                         "连接错误", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
                 catch (Exception ex)
                 {
+                    AppLogger.Error(ex, "Chat failed with unexpected error: tree={TreeId}",
+                        CurrentChatTree?.TreeId);
                     if (newNodeVM != null && previousSelected.Children.Contains(newNodeVM))
                     {
                         previousSelected.RemoveChild(newNodeVM);

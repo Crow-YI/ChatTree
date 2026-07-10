@@ -1,4 +1,9 @@
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
 using System.Windows;
+using System.Windows.Threading;
+using TreeChat.Infrastructure;
 using TreeChat.Services;
 
 namespace TreeChat
@@ -19,7 +24,33 @@ namespace TreeChat
         {
             base.OnStartup(e);
 
-            if (e.Args.Length > 0)
+            // === 初始化日志系统 ===
+            InitializeLogger(e.Args);
+
+            var appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
+            AppLogger.Info("Application starting: version={Version}", appVersion);
+
+            // === 注册全局未处理异常捕获 ===
+            AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+            {
+                var ex = args.ExceptionObject as Exception;
+                AppLogger.Fatal(ex ?? new Exception("Unknown"), "AppDomain unhandled exception");
+            };
+
+            Application.Current.DispatcherUnhandledException += (s, args) =>
+            {
+                AppLogger.Fatal(args.Exception, "Dispatcher unhandled exception");
+                args.Handled = true; // 记录后继续运行，避免直接崩溃
+            };
+
+            TaskScheduler.UnobservedTaskException += (s, args) =>
+            {
+                AppLogger.Fatal(args.Exception, "Unobserved task exception");
+                args.SetObserved();
+            };
+
+            // === 启动参数 ===
+            if (e.Args.Length > 0 && !e.Args[0].StartsWith("--"))
             {
                 StartupFilePath = e.Args[0];
             }
@@ -38,9 +69,11 @@ namespace TreeChat
             try
             {
                 await Backend.StartAsync();
+                AppLogger.Info("Python backend started successfully");
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Failed to start Python backend");
                 MessageBox.Show(
                     $"无法启动 Python 后端服务。\n\n{ex.Message}\n\n" +
                     "请确保已安装 uv (https://docs.astral.sh/uv/)，" +
@@ -60,11 +93,53 @@ namespace TreeChat
                     TopP = ApiConfig.TopP,
                     MaxTokens = ApiConfig.MaxTokens,
                 });
+                AppLogger.Info("Configuration pushed to backend: model={Model}", ApiConfig.ModelName);
             }
-            catch
+            catch (Exception ex)
             {
-                // 配置推送失败不阻止启动
+                AppLogger.Warn("Failed to push config to backend: {Message}", ex.Message);
             }
+        }
+
+        /// <summary>
+        /// 确定日志目录并初始化 AppLogger。
+        /// </summary>
+        private static void InitializeLogger(string[] args)
+        {
+            // 日志目录：项目根目录下的 logs/
+            var projectRoot = FindProjectRoot();
+            var logDir = projectRoot != null
+                ? Path.Combine(projectRoot, "logs")
+                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+
+            // 是否 DEBUG 模式：通过 --debug 命令行参数或配置文件控制
+            bool debugMode = args.Contains("--debug") || ApiConfig.EnableDebugLogging;
+
+            AppLogger.Initialize(logDir, debugMode);
+        }
+
+        /// <summary>
+        /// 查找项目根目录（查找 backend/pyproject.toml）。
+        /// 复用 ApiConfig 中的查找逻辑。
+        /// </summary>
+        private static string? FindProjectRoot()
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var dir = new DirectoryInfo(baseDir);
+
+            for (int i = 0; i < 8; i++)
+            {
+                if (File.Exists(Path.Combine(dir.FullName, "backend", "pyproject.toml")))
+                    return dir.FullName;
+
+                if (File.Exists(Path.Combine(dir.FullName, "py_version", "backend", "pyproject.toml")))
+                    return dir.FullName;
+
+                if (dir.Parent == null) break;
+                dir = dir.Parent;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -72,6 +147,8 @@ namespace TreeChat
         /// </summary>
         private void OnBackendProcessExited(int? exitCode)
         {
+            AppLogger.Warn("Backend process exited unexpectedly: code={ExitCode}", exitCode);
+
             Dispatcher.Invoke(() =>
             {
                 MessageBox.Show(
@@ -83,18 +160,23 @@ namespace TreeChat
 
         protected override async void OnExit(ExitEventArgs e)
         {
+            AppLogger.Info("Application exiting");
+
             // 优雅关闭 Python 后端
             try
             {
                 await Backend.StopAsync();
+                AppLogger.Info("Python backend stopped");
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略关闭时的错误
+                AppLogger.Warn("Error stopping backend: {Message}", ex.Message);
             }
 
             // 应用关闭时保存当前配置
             ApiConfig.SaveToFile();
+
+            AppLogger.Close();
             base.OnExit(e);
         }
     }

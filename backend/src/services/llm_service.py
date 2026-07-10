@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from collections.abc import AsyncGenerator
 
 from langchain_core.messages import BaseMessage
@@ -12,6 +14,8 @@ from openai import APIStatusError
 
 from ..core.config import settings
 from ..core.errors import LLMError
+
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -82,15 +86,27 @@ class LLMService:
         max_tokens: int | None = None,
     ) -> str:
         """非流式聊天。返回完整回复文本。"""
+        model_name = model or settings.model
         client = self._get_client(
             model=model, temperature=temperature, top_p=top_p, max_tokens=max_tokens,
         )
+        logger.info("LLM chat start: model=%s messages=%d", model_name, len(messages))
+        start = time.monotonic()
         try:
             response = await client.ainvoke(messages)
+            elapsed = time.monotonic() - start
+            logger.info("LLM chat end: model=%s elapsed=%.2fs", model_name, elapsed)
             return response.content
         except APIStatusError as e:
+            elapsed = time.monotonic() - start
+            logger.error(
+                "LLM API error: model=%s status=%d elapsed=%.2fs detail=%s",
+                model_name, e.status_code, elapsed, str(e.body),
+            )
             raise _map_openai_error(e)
         except Exception as e:
+            elapsed = time.monotonic() - start
+            logger.exception("LLM unexpected error: model=%s elapsed=%.2fs", model_name, elapsed)
             raise LLMError(
                 key="LLMError",
                 message="AI 服务调用失败。",
@@ -110,24 +126,49 @@ class LLMService:
 
         直接接受 LangChain BaseMessage 列表（无需 dict 转换）。
         """
+        model_name = model or settings.model
         client = self._get_client(
             model=model, temperature=temperature, top_p=top_p, max_tokens=max_tokens,
         )
+        logger.info(
+            "LLM astream start: model=%s messages=%d",
+            model_name, len(messages),
+        )
+        start = time.monotonic()
+        tokens = 0
         try:
             async for chunk in client.astream(messages):
                 content = chunk.content
                 if content:
+                    tokens += 1
                     yield content
         except APIStatusError as e:
+            elapsed = time.monotonic() - start
+            logger.error(
+                "LLM API error: model=%s status=%d tokens=%d elapsed=%.2fs detail=%s",
+                model_name, e.status_code, tokens, elapsed, str(e.body),
+            )
             raise _map_openai_error(e)
         except asyncio.CancelledError:
+            logger.warning("LLM astream cancelled: model=%s tokens=%d", model_name, tokens)
             raise
         except Exception as e:
+            elapsed = time.monotonic() - start
+            logger.exception(
+                "LLM unexpected error: model=%s tokens=%d elapsed=%.2fs",
+                model_name, tokens, elapsed,
+            )
             raise LLMError(
                 key="LLMError",
                 message="AI 服务调用失败。",
                 detail=str(e),
                 status_code=500,
+            )
+        else:
+            elapsed = time.monotonic() - start
+            logger.info(
+                "LLM astream end: model=%s tokens=%d elapsed=%.2fs",
+                model_name, tokens, elapsed,
             )
 
     async def close(self) -> None:

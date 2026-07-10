@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using TreeChat.Commands;
+using TreeChat.Infrastructure;
 using TreeChat.Models;
 using TreeChat.Services;
 
@@ -56,6 +57,8 @@ namespace TreeChat.ViewModels
 
                 string systemPrompt = dialog.SystemPrompt;
 
+                AppLogger.Info("Creating new chat: title={Title}", treeTitle);
+
                 ChatTree newTree = new ChatTree(systemPrompt);
                 newTree.TreeTitle = treeTitle;
 
@@ -81,6 +84,8 @@ namespace TreeChat.ViewModels
                 if (chatTree == null)
                     return;
 
+                AppLogger.Info("Opening existing chat: {Path}", chatTree.FilePath);
+
                 // 尝试注册到后端
                 await TryRegisterBackend(chatTree);
 
@@ -88,6 +93,7 @@ namespace TreeChat.ViewModels
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Open existing file failed");
                 MessageBox.Show($"读取失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -100,6 +106,7 @@ namespace TreeChat.ViewModels
         {
             try
             {
+                AppLogger.Info("Loading chat from path: {Path}", filePath);
                 var chatTree = _fileService.LoadChatTree(filePath);
                 if (chatTree == null)
                     return;
@@ -110,6 +117,7 @@ namespace TreeChat.ViewModels
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Load from path failed: {Path}", filePath);
                 MessageBox.Show($"加载失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -128,14 +136,12 @@ namespace TreeChat.ViewModels
                 if (!string.IsNullOrEmpty(response?.TreeId))
                 {
                     chatTree.TreeId = response.TreeId;
-                    System.Diagnostics.Debug.WriteLine(
-                        $"树已注册到后端 (TreeId={response.TreeId})");
+                    AppLogger.Info("Chat registered to backend: TreeId={TreeId}", response.TreeId);
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"注册树到后端失败 (将于首次 Chat 时重试): {ex.Message}");
+                AppLogger.Warn("Backend registration failed (will retry on first Chat): {Message}", ex.Message);
             }
         }
     }
