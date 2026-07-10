@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 
 from langchain_core.messages import BaseMessage
@@ -119,6 +120,8 @@ class LLMService:
                     yield content
         except APIStatusError as e:
             raise _map_openai_error(e)
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             raise LLMError(
                 key="LLMError",

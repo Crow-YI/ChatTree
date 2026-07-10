@@ -125,115 +125,143 @@ namespace TreeChat.ViewModels
             TreeNodeVM previousSelected = SelectedNode;
             TreeNodeVM? newNodeVM = null;
 
-            try
+            // 在循环外保存用户消息，避免 InputMessage 清空后重试时丢失
+            var userMessage = InputMessage;
+            if (string.IsNullOrWhiteSpace(userMessage)) return;
+
+            // 最多尝试 2 次（含首次 + 一次自动重试）
+            for (int attempt = 1; attempt <= 2; attempt++)
             {
-                // 乐观 UI 更新：先创建本地临时节点（使用树内计数器获取 ID）
-                int newNodeId = CurrentChatTree.GetNextNodeId();
-                ChatTreeNode newNode = new ChatTreeNode(SelectedNode.Node, InputMessage, newNodeId);
-                newNodeVM = SelectedNode.AddChild(newNode);
-                CurrentChatTree.IsModified = true;  // 标记未保存更改
-                ChatTreeChanged?.Invoke(SelectedNode, newNodeVM);
-                SelectedNode = newNodeVM;
-                AIReply = "";
-                var message = InputMessage;
-                InputMessage = string.Empty;
-
-                // 通过 Python 后端发送（流式）
-                // 首次发送时自动在 Python 端创建对话树
-                var backend = App.Backend;
-                if (string.IsNullOrEmpty(CurrentChatTree.TreeId))
+                try
                 {
-                    var treeResponse = await backend.CreateTreeAsync(
-                        CurrentChatTree.TreeTitle,
-                        CurrentChatTree.SystemPrompt);
-                    CurrentChatTree.TreeId = treeResponse.TreeId;
-                }
-                string treeId = CurrentChatTree.TreeId!;
-
-                string fullContent = "";
-                // 在后台线程上消费 SSE 流，避免阻塞 UI 线程渲染
-                var sseEvents = backend.ChatStreamAsync(
-                    treeId, previousSelected.Node.NodeID, message);
-                await Task.Run(async () =>
-                {
-                    await foreach (var sseEvent in sseEvents)
+                    // 乐观 UI 更新：先创建本地临时节点（使用树内计数器获取 ID）
+                    int newNodeId = CurrentChatTree.GetNextNodeId();
+                    ChatTreeNode newNode = new ChatTreeNode(SelectedNode.Node, userMessage, newNodeId);
+                    newNodeVM = SelectedNode.AddChild(newNode);
+                    CurrentChatTree.IsModified = true;  // 标记未保存更改
+                    if (attempt == 1)
                     {
-                        switch (sseEvent.EventType)
-                        {
-                            case "created":
-                                break;
+                        // 仅在第一次尝试时清空输入框
+                        InputMessage = string.Empty;
+                    }
+                    ChatTreeChanged?.Invoke(SelectedNode, newNodeVM);
+                    SelectedNode = newNodeVM;
+                    AIReply = "";
 
-                            case "delta":
-                                var delta = System.Text.Json.JsonSerializer.Deserialize<Models.SseDeltaEvent>(sseEvent.Data);
-                                if (delta != null)
-                                {
-                                    fullContent += delta.Content;
-                                    var contentToShow = fullContent;
-                                    // 以 Background 优先级调度（低于 DataBind 和 Render），
-                                    // 确保上一轮 DataBind(8)→Render(7) 完成后再更新
+                    // 通过 Python 后端发送（流式）
+                    // 首次发送时自动在 Python 端创建对话树
+                    var backend = App.Backend;
+                    if (string.IsNullOrEmpty(CurrentChatTree.TreeId))
+                    {
+                        var treeResponse = await backend.CreateTreeAsync(
+                            CurrentChatTree.TreeTitle,
+                            CurrentChatTree.SystemPrompt);
+                        CurrentChatTree.TreeId = treeResponse.TreeId;
+                    }
+                    string treeId = CurrentChatTree.TreeId!;
+
+                    string fullContent = "";
+                    // 在后台线程上消费 SSE 流，避免阻塞 UI 线程渲染
+                    var sseEvents = backend.ChatStreamAsync(
+                        treeId, previousSelected.Node.NodeID, userMessage);
+                    await Task.Run(async () =>
+                    {
+                        await foreach (var sseEvent in sseEvents)
+                        {
+                            switch (sseEvent.EventType)
+                            {
+                                case "created":
+                                    break;
+
+                                case "delta":
+                                    var delta = System.Text.Json.JsonSerializer.Deserialize<Models.SseDeltaEvent>(sseEvent.Data);
+                                    if (delta != null)
+                                    {
+                                        fullContent += delta.Content;
+                                        var contentToShow = fullContent;
+                                        // 以 Background 优先级调度（低于 DataBind 和 Render），
+                                        // 确保上一轮 DataBind(8)→Render(7) 完成后再更新
+                                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                                        {
+                                            AIReply = contentToShow;
+                                        }, System.Windows.Threading.DispatcherPriority.Background);
+                                    }
+                                    break;
+
+                                case "done":
+                                    var done = System.Text.Json.JsonSerializer.Deserialize<Models.SseDoneEvent>(sseEvent.Data);
                                     await Application.Current.Dispatcher.InvokeAsync(() =>
                                     {
-                                        AIReply = contentToShow;
-                                    }, System.Windows.Threading.DispatcherPriority.Background);
-                                }
-                                break;
+                                        if (done?.ReplyMessage != null)
+                                        {
+                                            SelectedNode.Node.SetAiReply(done.ReplyMessage.Content);
+                                            CurrentChatTree.IsModified = true;  // 标记未保存更改
+                                        }
+                                        // 触发树更新
+                                        ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
+                                    });
+                                    return;
 
-                            case "done":
-                                var done = System.Text.Json.JsonSerializer.Deserialize<Models.SseDoneEvent>(sseEvent.Data);
-                                await Application.Current.Dispatcher.InvokeAsync(() =>
-                                {
-                                    if (done?.ReplyMessage != null)
+                                case "error":
+                                    var error = System.Text.Json.JsonSerializer.Deserialize<Models.SseErrorEvent>(sseEvent.Data);
+                                    await Application.Current.Dispatcher.InvokeAsync(() =>
                                     {
-                                        SelectedNode.Node.SetAiReply(done.ReplyMessage.Content);
-                                        CurrentChatTree.IsModified = true;  // 标记未保存更改
-                                    }
-                                    // 触发树更新
-                                    ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
-                                });
-                                return;
+                                        // 失败清理
+                                        previousSelected.RemoveChild(newNodeVM);
+                                        SelectedNode = previousSelected;
+                                        ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
+                                        AIReply = string.Empty;
+                                        MessageBox.Show(
+                                            error?.Message ?? "AI 调用失败。",
+                                            "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                                    });
+                                    return;
+                            }
+                        }
+                    });
 
-                            case "error":
-                                var error = System.Text.Json.JsonSerializer.Deserialize<Models.SseErrorEvent>(sseEvent.Data);
-                                await Application.Current.Dispatcher.InvokeAsync(() =>
-                                {
-                                    // 失败清理
-                                    previousSelected.RemoveChild(newNodeVM);
-                                    SelectedNode = previousSelected;
-                                    ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
-                                    AIReply = string.Empty;
-                                    MessageBox.Show(
-                                        error?.Message ?? "AI 调用失败。",
-                                        "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-                                });
-                                return;
+                    return; // 成功，退出
+                }
+                catch (HttpRequestException ex)
+                {
+                    // 清理乐观创建的节点
+                    if (newNodeVM != null && previousSelected.Children.Contains(newNodeVM))
+                    {
+                        previousSelected.RemoveChild(newNodeVM);
+                    }
+                    SelectedNode = previousSelected;
+                    ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
+                    AIReply = string.Empty;
+
+                    // 第一次失败时尝试重启后端
+                    if (attempt == 1)
+                    {
+                        System.Diagnostics.Debug.WriteLine("后端连接失败，尝试重启...");
+                        var restarted = await App.Backend.TryRestartAsync();
+                        if (restarted)
+                        {
+                            System.Diagnostics.Debug.WriteLine("后端重启成功，自动重试...");
+                            continue; // 重试
                         }
                     }
-                });
-            }
-            catch (HttpRequestException ex)
-            {
-                // 如果已经创建了节点，则将其移除
-                if (newNodeVM != null && previousSelected.Children.Contains(newNodeVM))
-                {
-                    previousSelected.RemoveChild(newNodeVM);
+
+                    MessageBox.Show($"无法连接到 Python 后端服务。\n\n{ex.Message}",
+                        "连接错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
                 }
-                SelectedNode = previousSelected;
-                ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
-                AIReply = string.Empty;
-                MessageBox.Show($"无法连接到 Python 后端服务。\n\n{ex.Message}",
-                    "连接错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            catch (Exception ex)
-            {
-                if (newNodeVM != null && previousSelected.Children.Contains(newNodeVM))
+                catch (Exception ex)
                 {
-                    previousSelected.RemoveChild(newNodeVM);
+                    if (newNodeVM != null && previousSelected.Children.Contains(newNodeVM))
+                    {
+                        previousSelected.RemoveChild(newNodeVM);
+                    }
+                    SelectedNode = previousSelected;
+                    ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
+                    AIReply = string.Empty;
+                    MessageBox.Show($"请求过程中发生错误：{ex.Message}",
+                        "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
                 }
-                SelectedNode = previousSelected;
-                ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
-                AIReply = string.Empty;
-                MessageBox.Show($"请求过程中发生错误：{ex.Message}",
-                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

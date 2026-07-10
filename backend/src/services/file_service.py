@@ -39,7 +39,6 @@ class FileService:
         root_node = self._deserialize_node(root_data, parent=None)
 
         tree = ChatTree(
-            tree_id="",  # 加载后重新生成
             title=title or data.get("TreeTitle", "已导入对话"),
             root_node=root_node,
             created_at=data.get("CreatedTime", datetime.now(timezone.utc).isoformat()),
