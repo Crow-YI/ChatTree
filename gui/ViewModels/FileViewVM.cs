@@ -116,18 +116,26 @@ namespace TreeChat.ViewModels
         }
 
         /// <summary>
-        /// 尝试将树注册到 Python 后端（失败不影响本地使用）
+        /// 尝试将树注册到 Python 后端，使后端拥有该树的数据。
+        /// 注册成功后会设置 chatTree.TreeId，后续 Chat 直接使用该树。
         /// </summary>
         private static async Task TryRegisterBackend(ChatTree chatTree)
         {
             try
             {
                 var json = File.ReadAllText(chatTree.FilePath!);
-                await App.Backend.DeserializeTreeAsync(json, chatTree.TreeTitle);
+                var response = await App.Backend.DeserializeTreeAsync(json, chatTree.TreeTitle);
+                if (!string.IsNullOrEmpty(response?.TreeId))
+                {
+                    chatTree.TreeId = response.TreeId;
+                    System.Diagnostics.Debug.WriteLine(
+                        $"树已注册到后端 (TreeId={response.TreeId})");
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                // 后端不可用不影响本地使用
+                System.Diagnostics.Debug.WriteLine(
+                    $"注册树到后端失败 (将于首次 Chat 时重试): {ex.Message}");
             }
         }
     }

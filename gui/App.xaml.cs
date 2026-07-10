@@ -32,6 +32,9 @@ namespace TreeChat
                 baseUrl: ApiConfig.PythonBackendUrl,
                 pyProjectDir: ApiConfig.PythonProjectDir);
 
+            // 监听后端进程意外退出
+            Backend.ProcessExited += OnBackendProcessExited;
+
             try
             {
                 await Backend.StartAsync();
@@ -62,6 +65,20 @@ namespace TreeChat
             {
                 // 配置推送失败不阻止启动
             }
+        }
+
+        /// <summary>
+        /// Python 后端进程意外退出时的处理。
+        /// </summary>
+        private void OnBackendProcessExited(int? exitCode)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                MessageBox.Show(
+                    $"Python 后端进程意外退出 (exit code: {exitCode})。\n\n" +
+                    "请重启应用程序以重新连接后端服务。",
+                    "后端连接断开", MessageBoxButton.OK, MessageBoxImage.Warning);
+            });
         }
 
         protected override async void OnExit(ExitEventArgs e)

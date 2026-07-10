@@ -18,11 +18,23 @@ namespace TreeChat.Services
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
         private readonly string _pyProjectDir;
+        private bool _isStartingUp;
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         };
+
+        /// <summary>
+        /// 后端进程意外退出时触发。
+        /// </summary>
+        public event Action<int?>? ProcessExited;
+
+        /// <summary>
+        /// 后端是否正在运行。
+        /// </summary>
+        public bool IsRunning =>
+            _pythonProcess != null && !_pythonProcess.HasExited;
 
         public PythonBackendService(string baseUrl = "http://127.0.0.1:8800",
                                      string? pyProjectDir = null)
@@ -32,8 +44,10 @@ namespace TreeChat.Services
             _httpClient.DefaultRequestHeaders.Accept.Add(
                 new MediaTypeWithQualityHeaderValue("application/json"));
 
-            // 自动检测 Python 后端目录
-            _pyProjectDir = pyProjectDir ?? AutoDetectBackendDir();
+            // 自动检测 Python 后端目录（空字符串视为未指定，触发自动检测）
+            _pyProjectDir = string.IsNullOrEmpty(pyProjectDir)
+                ? AutoDetectBackendDir()
+                : pyProjectDir;
         }
 
         /// <summary>
@@ -80,12 +94,13 @@ namespace TreeChat.Services
         /// </summary>
         public async Task<bool> StartAsync(CancellationToken ct = default)
         {
-            // 先检查是否已经在运行
-            if (await HealthCheckAsync())
-            {
-                System.Diagnostics.Debug.WriteLine("Python 后端已在运行，跳过启动。");
-                return true;
-            }
+            _isStartingUp = false;
+
+            // 如果有旧进程在运行，先清理（避免僵进程干扰）
+            await TryKillExistingProcessAsync();
+
+            // 清除之前监控的进程引用
+            DetachProcessMonitor();
 
             // 查找 uv 可执行文件
             string? uvPath = FindUvPath();
@@ -113,15 +128,27 @@ namespace TreeChat.Services
                 CreateNoWindow = true,
             };
 
+            // 清除系统环境变量干扰，移除 VIRTUAL_ENV，避免 uv 混淆
+            psi.EnvironmentVariables.Remove("VIRTUAL_ENV");
+
             _pythonProcess = new Process { StartInfo = psi };
+
+            // 注册进程退出监控
+            _pythonProcess.EnableRaisingEvents = true;
+            _pythonProcess.Exited += OnProcessExited;
+
+            // 标记启动中，防止 ProcessExited 在启动阶段误报
+            _isStartingUp = true;
+
             _pythonProcess.Start();
 
-            // 等待 health check（最多 15 秒）
+            // 等待 health check（首次 uv 安装依赖可能较慢，最多 60 秒）
             var sw = Stopwatch.StartNew();
-            while (sw.Elapsed.TotalSeconds < 15)
+            while (sw.Elapsed.TotalSeconds < 60)
             {
                 if (_pythonProcess.HasExited)
                 {
+                    _isStartingUp = false;
                     var stderr = await _pythonProcess.StandardError.ReadToEndAsync();
                     var stdout = await _pythonProcess.StandardOutput.ReadToEndAsync();
                     throw new InvalidOperationException(
@@ -134,13 +161,120 @@ namespace TreeChat.Services
 
                 if (await HealthCheckAsync())
                 {
+                    _isStartingUp = false;
                     return true;
                 }
 
                 await Task.Delay(500, ct);
             }
 
-            throw new TimeoutException("Python 后端启动超时（15秒）。");
+            _isStartingUp = false;
+            throw new TimeoutException("Python 后端启动超时（60秒）。首次运行可能较慢，请稍后重试。");
+        }
+
+        /// <summary>
+        /// 尝试释放 8800 端口 — 先发 shutdown 请求，若无效则尝试通过 netstat+taskkill 强制清理。
+        /// </summary>
+        private async Task TryKillExistingProcessAsync()
+        {
+            // 方式一：发送优雅 shutdown 请求
+            try
+            {
+                await PostAsync<ApiSuccessResponse>("/api/v1/shutdown");
+                System.Diagnostics.Debug.WriteLine("已通过 shutdown 请求清理残留后端。");
+                await Task.Delay(1000);
+                return;
+            }
+            catch
+            {
+                // 没有响应 shutdown 的进程
+            }
+
+            // 方式二：通过 netstat 查找 8800 端口的进程并强制终止
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "netstat",
+                    Arguments = "-ano | findstr :8800",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                using var proc = Process.Start(psi);
+                if (proc == null) return;
+                var output = await proc.StandardOutput.ReadToEndAsync();
+                proc.WaitForExit(3000);
+
+                foreach (var line in output.Split('\n'))
+                {
+                    if (line.Contains("LISTENING"))
+                    {
+                        var parts = line.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length > 4 && int.TryParse(parts[4], out var pid))
+                        {
+                            try
+                            {
+                                Process.GetProcessById(pid).Kill();
+                                System.Diagnostics.Debug.WriteLine($"已强制终止占用 8800 端口的进程 (PID {pid})。");
+                                await Task.Delay(500);
+                            }
+                            catch { /* 进程可能已结束或权限不足 */ }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"清理 8800 端口失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 进程意外退出处理。
+        /// </summary>
+        private void OnProcessExited(object? sender, EventArgs e)
+        {
+            var exitCode = _pythonProcess?.ExitCode;
+            var stderr = "";
+            try
+            {
+                if (_pythonProcess != null && !_pythonProcess.StandardError.EndOfStream)
+                    stderr = _pythonProcess.StandardError.ReadToEnd();
+            }
+            catch { /* stderr 可能已被消费 */ }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Python 后端进程退出 (exit code: {exitCode})。stderr: {stderr}");
+
+            // 启动阶段的退出由 StartAsync 的轮询逻辑处理，不重复通知
+            if (!_isStartingUp)
+                ProcessExited?.Invoke(exitCode);
+        }
+
+        /// <summary>
+        /// 断开进程退出事件监听。
+        /// </summary>
+        private void DetachProcessMonitor()
+        {
+            if (_pythonProcess != null)
+            {
+                _pythonProcess.Exited -= OnProcessExited;
+            }
+        }
+
+        /// <summary>
+        /// 尝试重启后端进程。返回 true 表示重启成功。
+        /// </summary>
+        public async Task<bool> TryRestartAsync(CancellationToken ct = default)
+        {
+            try { await StopAsync(); } catch { }
+            try { return await StartAsync(ct); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"重启后端失败: {ex.Message}");
+                return false;
+            }
         }
 
         /// <summary>
@@ -160,7 +294,10 @@ namespace TreeChat.Services
 
             // 2. 如果 WPF 管理了进程，等待并清理
             if (_pythonProcess == null || _pythonProcess.HasExited)
+            {
+                DetachProcessMonitor();
                 return;
+            }
 
             var sw = Stopwatch.StartNew();
             while (!_pythonProcess.HasExited && sw.Elapsed.TotalSeconds < 3)
@@ -173,6 +310,8 @@ namespace TreeChat.Services
             {
                 try { _pythonProcess.Kill(); } catch { }
             }
+
+            DetachProcessMonitor();
         }
 
         public async Task<bool> HealthCheckAsync()
@@ -411,6 +550,7 @@ namespace TreeChat.Services
         public void Dispose()
         {
             _httpClient.Dispose();
+            DetachProcessMonitor();
             _pythonProcess?.Dispose();
         }
     }

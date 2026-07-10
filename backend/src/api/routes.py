@@ -250,6 +250,10 @@ async def chat(
             }, ensure_ascii=False)
             yield {"event": "error", "data": error_data}
 
+        except asyncio.CancelledError:
+            # 客户端断开连接，不清理节点保留已收到的内容
+            raise
+
         except Exception as e:
             # 未知错误 → 清理节点
             try:
