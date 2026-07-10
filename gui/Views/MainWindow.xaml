@@ -2,112 +2,187 @@
         x:Name="MainWin"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="clr-namespace:TreeChat.ViewModels"
         xmlns:local="clr-namespace:TreeChat.Views"
-        Title="树形AI聊天工具" Height="800" Width="1200"
+        Title="ChatTree - 树形 AI 聊天工具"
+        Icon="/TreeChat;component/Assets/ChatTree.ico"
+        Height="800"
+        Width="1200"
+        MinHeight="560"
+        MinWidth="820"
         Background="{StaticResource WindowBackground}">
     <Window.CommandBindings>
         <CommandBinding Command="ApplicationCommands.Save"
                         Executed="SaveCommand_Executed"
-                        CanExecute="SaveCommand_CanExecute" />
+                        CanExecute="SaveCommand_CanExecute"/>
     </Window.CommandBindings>
     <Window.InputBindings>
-        <KeyBinding Key="S" Modifiers="Control" Command="ApplicationCommands.Save" />
+        <KeyBinding Key="S" Modifiers="Control" Command="ApplicationCommands.Save"/>
     </Window.InputBindings>
+
     <Window.Resources>
-        <!-- 侧边栏按钮样式：覆盖全局 Button 样式 -->
-        <Style x:Key="SidebarButtonStyle" TargetType="Button" BasedOn="{x:Null}">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#505E6C"/>
+        <Style x:Key="SidebarNavigationButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource IconButtonStyle}">
             <Setter Property="Width" Value="40"/>
             <Setter Property="Height" Value="40"/>
             <Setter Property="Margin" Value="4,2"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="20"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#DCE6F0"/>
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         </Style>
     </Window.Resources>
 
-    <Grid Margin="10">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="48"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="4*"/>
-        </Grid.ColumnDefinitions>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="44"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-        <!-- ===== 左侧边栏（48px）===== -->
-        <Border Grid.Column="0" Background="#F0F2F5" CornerRadius="4" Margin="0,0,4,0">
-            <Grid>
-                <!-- 顶部：树形视图 + 文件管理按钮 -->
-                <StackPanel VerticalAlignment="Top" Margin="0,8,0,0">
-                    <Button x:Name="TreeViewButton" ToolTip="树形视图"
-                            Command="{Binding ShowTreeViewCommand}"
-                            Content="🌳">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource SidebarButtonStyle}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ActiveView}" Value="TreeView">
-                                        <Setter Property="Background" Value="#DCE6F0"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+        <Border Grid.Row="0"
+                Background="{StaticResource TopBarBackground}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1">
+            <Grid Margin="8,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-                    <Button x:Name="FileViewButton" ToolTip="文件管理"
-                            Command="{Binding ShowFileViewCommand}"
-                            Content="📁">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource SidebarButtonStyle}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ActiveView}" Value="FileView">
-                                        <Setter Property="Background" Value="#DCE6F0"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+                <Button Command="{Binding ToggleSidebarCommand}"
+                        Style="{StaticResource IconButtonStyle}"
+                        ToolTip="收起或展开侧栏">
+                    <Grid>
+                        <TextBlock Text="&#xE89F;" FontFamily="{StaticResource IconFont}" FontSize="16">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="&#xE8A0;" FontFamily="{StaticResource IconFont}" FontSize="16">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Button>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                    <TextBlock Text="ChatTree" FontSize="13" FontWeight="SemiBold"/>
+                    <TextBlock Text="  /  树形 AI 对话" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
                 </StackPanel>
 
-                <!-- 底部：设置按钮 -->
-                <StackPanel VerticalAlignment="Bottom" Margin="0,0,0,8">
-                    <Button x:Name="SettingsButton" ToolTip="设置"
-                            Command="{Binding ShowSettingsCommand}"
-                            Content="⚙️">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource SidebarButtonStyle}">
-                                <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#DCE6F0"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                </StackPanel>
+                <TextBlock Grid.Column="2"
+                           Text="本地工作区"
+                           FontSize="11"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,6,0"/>
             </Grid>
         </Border>
 
-        <!-- ===== 多功能内容区域 ===== -->
-        <Grid Grid.Column="1" Margin="4,0,8,0">
-            <!-- 树形图界面 -->
-            <local:TreeVisualizationView x:Name="treeView"
-                                         DataContext="{Binding TreeVisualizationVM}"/>
+        <Grid Grid.Row="1" Margin="8" ClipToBounds="True">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding NavigationColumnWidth}"/>
+                <ColumnDefinition Width="{Binding WorkspaceColumnWidth}"/>
+                <ColumnDefinition Width="4*"/>
+            </Grid.ColumnDefinitions>
 
-            <!-- 文件界面 -->
-            <local:FileView x:Name="fileView"
-                            DataContext="{Binding FileViewVM}"/>
+            <Border Grid.Column="0"
+                    Background="{StaticResource SidebarBackground}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="5"
+                    Margin="0,0,4,0"
+                    Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid>
+                    <StackPanel VerticalAlignment="Top" Margin="0,6,0,0">
+                        <Button Command="{Binding ShowTreeViewCommand}"
+                                Content="&#x1F333;"
+                                FontFamily="{StaticResource EmojiFont}"
+                                FontSize="19"
+                                ToolTip="树形视图">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SidebarNavigationButtonStyle}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsTreeViewVisible}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource HoverBackground}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+
+                        <Button Command="{Binding ShowFileViewCommand}"
+                                Content="&#x1F4C1;"
+                                FontFamily="{StaticResource EmojiFont}"
+                                FontSize="19"
+                                ToolTip="文件管理">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SidebarNavigationButtonStyle}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFileViewVisible}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource HoverBackground}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+
+                    <Button VerticalAlignment="Bottom"
+                            Command="{Binding ShowSettingsCommand}"
+                            Content="&#x2699;&#xFE0F;"
+                            FontFamily="{StaticResource EmojiFont}"
+                            FontSize="19"
+                            ToolTip="设置"
+                            Style="{StaticResource SidebarNavigationButtonStyle}"
+                            Margin="4,0,4,6"/>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1"
+                    Background="{StaticResource CardBackground}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="5"
+                    Margin="4,0,4,0"
+                    ClipToBounds="True"
+                    Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid>
+                    <local:TreeVisualizationView x:Name="treeView"
+                                                 DataContext="{Binding TreeVisualizationVM}"/>
+                    <local:FileView x:Name="fileView"
+                                    DataContext="{Binding FileViewVM}"/>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2"
+                    Background="{StaticResource CardBackground}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="5"
+                    Margin="4,0,0,0"
+                    ClipToBounds="True">
+                <local:ChatInformationView DataContext="{Binding ChatInformationVM}"/>
+            </Border>
         </Grid>
-
-        <!-- ===== 节点信息展示界面 ===== -->
-        <local:ChatInformationView Grid.Column="2"
-                                   DataContext="{Binding ChatInformationVM}"/>
     </Grid>
 </Window>

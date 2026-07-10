@@ -29,6 +29,27 @@ namespace TreeChat.ViewModels
 
         // === 导航状态 ===
         private ActiveViewType _activeView = ActiveViewType.FileView;
+        private bool _isSidebarExpanded = true;
+
+        public bool IsSidebarExpanded
+        {
+            get => _isSidebarExpanded;
+            set
+            {
+                if (SetProperty(ref _isSidebarExpanded, value))
+                {
+                    OnPropertyChanged(nameof(NavigationColumnWidth));
+                    OnPropertyChanged(nameof(WorkspaceColumnWidth));
+                }
+            }
+        }
+
+        public GridLength NavigationColumnWidth =>
+            IsSidebarExpanded ? new GridLength(48) : new GridLength(0);
+
+        public GridLength WorkspaceColumnWidth =>
+            IsSidebarExpanded ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+
         public ActiveViewType ActiveView
         {
             get => _activeView;
@@ -58,6 +79,7 @@ namespace TreeChat.ViewModels
         public Commands.RelayCommand ShowTreeViewCommand { get; }
         public Commands.RelayCommand ShowFileViewCommand { get; }
         public Commands.RelayCommand ShowSettingsCommand { get; }
+        public Commands.RelayCommand ToggleSidebarCommand { get; }
 
         public MainWindowVM(IFileService fileService)
         {
@@ -70,6 +92,7 @@ namespace TreeChat.ViewModels
             // 导航命令
             ShowTreeViewCommand = new Commands.RelayCommand(_ => ActiveView = ActiveViewType.TreeView);
             ShowFileViewCommand = new Commands.RelayCommand(_ => ActiveView = ActiveViewType.FileView);
+            ToggleSidebarCommand = new Commands.RelayCommand(_ => IsSidebarExpanded = !IsSidebarExpanded);
             ShowSettingsCommand = new Commands.RelayCommand(_ =>
             {
                 var settingsWindow = new Views.SettingsWindow();
