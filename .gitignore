@@ -9,6 +9,7 @@ build/
 .env
 *.env.local
 config.json
+recent_files.json
 
 # IDE
 .vscode/

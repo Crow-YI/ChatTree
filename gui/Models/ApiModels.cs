@@ -235,6 +235,17 @@ namespace TreeChat.Models
         public ChatConfigData? Config { get; set; }
     }
 
+    // === Recent Files ===
+
+    public class RecentFileItem
+    {
+        [JsonPropertyName("path")]
+        public string Path { get; set; } = "";
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = "";
+    }
+
     // === Generic ===
 
     public class ApiSuccessResponse

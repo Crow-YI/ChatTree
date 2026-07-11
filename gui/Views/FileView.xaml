@@ -43,7 +43,9 @@
                        FontWeight="SemiBold"
                        Foreground="{StaticResource TextSecondaryBrush}"
                        Margin="4,0,0,8"/>
-            <ListBox Grid.Row="1" ItemsSource="{Binding RecentFiles}">
+            <ListBox Grid.Row="1"
+                     ItemsSource="{Binding RecentFiles}"
+                     MouseDoubleClick="RecentFiles_MouseDoubleClick">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Grid>
@@ -52,7 +54,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource IconFont}" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="1" Text="{Binding}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

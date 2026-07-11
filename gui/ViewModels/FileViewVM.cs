@@ -9,16 +9,16 @@ using TreeChat.Services;
 namespace TreeChat.ViewModels
 {
     /// <summary>
-    /// 文件管理视图的ViewModel，负责创建新文件和打开现有文件
+    /// 文件管理视图的ViewModel，负责创建新文件、打开现有文件和最近文件历史
     /// </summary>
     public class FileViewVM : BaseViewModel
     {
         private readonly FileService _fileService;
 
         /// <summary>
-        /// 最近打开的文件列表（占位，目前未实现持久化）
+        /// 最近打开的文件列表
         /// </summary>
-        public ObservableCollection<string> RecentFiles { get; } = new();
+        public ObservableCollection<RecentFileItem> RecentFiles { get; } = new();
 
         /// <summary>
         /// 创建新文件命令
@@ -31,6 +31,11 @@ namespace TreeChat.ViewModels
         public RelayCommand OpenExistingFile { get; }
 
         /// <summary>
+        /// 打开最近文件命令
+        /// </summary>
+        public RelayCommand OpenRecentFileCommand { get; }
+
+        /// <summary>
         /// 文件创建或打开后触发，通知 MainWindowVM 加载树
         /// </summary>
         public event Action<ChatTree>? FileCreatedOrOpened;
@@ -41,6 +46,63 @@ namespace TreeChat.ViewModels
 
             CreateNewFile = new RelayCommand(ExecuteCreateNewFile);
             OpenExistingFile = new RelayCommand(ExecuteOpenExistingFile);
+            OpenRecentFileCommand = new RelayCommand(param =>
+            {
+                if (param is RecentFileItem item)
+                    ExecuteOpenRecentFile(item);
+            });
+
+            // 加载最近文件历史
+            ReloadRecentFiles();
+        }
+
+        /// <summary>
+        /// 从持久化存储加载最近文件列表。
+        /// </summary>
+        private void ReloadRecentFiles()
+        {
+            RecentFiles.Clear();
+            foreach (var item in RecentFilesManager.GetAll())
+            {
+                RecentFiles.Add(item);
+            }
+        }
+
+        /// <summary>
+        /// 将文件添加到最近文件列表（去重、移到顶部）。
+        /// </summary>
+        private void AddRecentFile(ChatTree tree)
+        {
+            if (tree.FilePath == null) return;
+
+            var title = string.IsNullOrWhiteSpace(tree.TreeTitle)
+                ? Path.GetFileNameWithoutExtension(tree.FilePath)
+                : tree.TreeTitle;
+
+            RecentFilesManager.AddFile(tree.FilePath, title);
+
+            // 刷新 UI 集合（Insert 可能改变顺序）
+            // 直接把新项插入到最前面，若已存在则先移除旧项
+            var existing = RecentFiles.FirstOrDefault(f =>
+                string.Equals(f.Path, tree.FilePath, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                RecentFiles.Remove(existing);
+                existing.Title = title;
+                RecentFiles.Insert(0, existing);
+            }
+            else
+            {
+                RecentFiles.Insert(0, new RecentFileItem
+                {
+                    Path = tree.FilePath,
+                    Title = title,
+                });
+            }
+
+            // 超出上限时移除末尾
+            while (RecentFiles.Count > 10)
+                RecentFiles.RemoveAt(RecentFiles.Count - 1);
         }
 
         /// <summary>
@@ -69,6 +131,7 @@ namespace TreeChat.ViewModels
                 // 尝试注册到后端
                 TryRegisterBackend(newTree).ConfigureAwait(false);
 
+                AddRecentFile(newTree);
                 FileCreatedOrOpened?.Invoke(newTree);
             }
         }
@@ -89,11 +152,59 @@ namespace TreeChat.ViewModels
                 // 尝试注册到后端
                 await TryRegisterBackend(chatTree);
 
+                AddRecentFile(chatTree);
                 FileCreatedOrOpened?.Invoke(chatTree);
             }
             catch (Exception ex)
             {
                 AppLogger.Error(ex, "Open existing file failed");
+                MessageBox.Show($"读取失败：{ex.Message}", "错误",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// 执行打开最近文件列表中的文件。
+        /// 若文件已不存在，提示并自动从列表中移除。
+        /// </summary>
+        private async void ExecuteOpenRecentFile(RecentFileItem item)
+        {
+            if (item == null) return;
+
+            try
+            {
+                // 检查文件是否存在
+                if (!File.Exists(item.Path))
+                {
+                    var result = MessageBox.Show(
+                        $"文件不存在或已被移动：\n{item.Path}\n\n是否从最近文件中移除？",
+                        "文件不存在",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        RecentFilesManager.RemoveFile(item.Path);
+                        RecentFiles.Remove(item);
+                        AppLogger.Info("Removed missing file from recent files: {Path}", item.Path);
+                    }
+                    return;
+                }
+
+                AppLogger.Info("Opening recent file: {Path}", item.Path);
+
+                var chatTree = _fileService.LoadChatTree(item.Path);
+                if (chatTree == null)
+                    return;
+
+                await TryRegisterBackend(chatTree);
+
+                AddRecentFile(chatTree);
+                FileCreatedOrOpened?.Invoke(chatTree);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "Open recent file failed: {Path}", item.Path);
                 MessageBox.Show($"读取失败：{ex.Message}", "错误",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -113,6 +224,7 @@ namespace TreeChat.ViewModels
 
                 await TryRegisterBackend(chatTree);
 
+                AddRecentFile(chatTree);
                 FileCreatedOrOpened?.Invoke(chatTree);
             }
             catch (Exception ex)

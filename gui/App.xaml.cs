@@ -173,8 +173,9 @@ namespace TreeChat
                 AppLogger.Warn("Error stopping backend: {Message}", ex.Message);
             }
 
-            // 应用关闭时保存当前配置
+            // 应用关闭时保存当前配置和最近文件列表
             ApiConfig.SaveToFile();
+            RecentFilesManager.Save();
 
             AppLogger.Close();
             base.OnExit(e);
