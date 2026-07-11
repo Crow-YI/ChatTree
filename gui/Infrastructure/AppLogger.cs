@@ -67,7 +67,7 @@ namespace TreeChat.Infrastructure
         /// <summary>
         /// 记录 DEBUG 级别日志（仅在 DEBUG 模式下生效）。
         /// </summary>
-        public static void Debug(string message, params object[] args)
+        public static void Debug(string message, params object?[] args)
         {
             _logger?.Debug(message, args);
         }
@@ -75,7 +75,7 @@ namespace TreeChat.Infrastructure
         /// <summary>
         /// 记录 INFO 级别日志。
         /// </summary>
-        public static void Info(string message, params object[] args)
+        public static void Info(string message, params object?[] args)
         {
             _logger?.Information(message, args);
         }
@@ -83,7 +83,7 @@ namespace TreeChat.Infrastructure
         /// <summary>
         /// 记录 WARNING 级别日志。
         /// </summary>
-        public static void Warn(string message, params object[] args)
+        public static void Warn(string message, params object?[] args)
         {
             _logger?.Warning(message, args);
         }
@@ -91,7 +91,7 @@ namespace TreeChat.Infrastructure
         /// <summary>
         /// 记录 WARNING 级别日志（含异常）。
         /// </summary>
-        public static void Warn(Exception ex, string message, params object[] args)
+        public static void Warn(Exception ex, string message, params object?[] args)
         {
             _logger?.Warning(ex, message, args);
         }
@@ -99,7 +99,7 @@ namespace TreeChat.Infrastructure
         /// <summary>
         /// 记录 ERROR 级别日志（仅含消息）。
         /// </summary>
-        public static void Error(string message, params object[] args)
+        public static void Error(string message, params object?[] args)
         {
             _logger?.Error(message, args);
         }
@@ -107,7 +107,7 @@ namespace TreeChat.Infrastructure
         /// <summary>
         /// 记录 ERROR 级别日志（含异常）。
         /// </summary>
-        public static void Error(Exception ex, string message, params object[] args)
+        public static void Error(Exception ex, string message, params object?[] args)
         {
             _logger?.Error(ex, message, args);
         }
@@ -115,7 +115,7 @@ namespace TreeChat.Infrastructure
         /// <summary>
         /// 记录 FATAL 级别日志（含异常），用于不可恢复的错误。
         /// </summary>
-        public static void Fatal(Exception ex, string message, params object[] args)
+        public static void Fatal(Exception ex, string message, params object?[] args)
         {
             _logger?.Fatal(ex, message, args);
         }

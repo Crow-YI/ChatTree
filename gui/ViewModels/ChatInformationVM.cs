@@ -51,7 +51,17 @@ namespace TreeChat.ViewModels
             set => SetProperty(ref _isRootSelected, value);
         }
 
-        private string _inputMessage;
+        private bool _isStreaming;
+        /// <summary>
+        /// AI 是否正在流式输出
+        /// </summary>
+        public bool IsStreaming
+        {
+            get => _isStreaming;
+            set => SetProperty(ref _isStreaming, value);
+        }
+
+        private string _inputMessage = string.Empty;
         public string InputMessage
         {
             get => _inputMessage;
@@ -139,7 +149,7 @@ namespace TreeChat.ViewModels
                 try
                 {
                     // 乐观 UI 更新：先创建本地临时节点（使用树内计数器获取 ID）
-                    int newNodeId = CurrentChatTree.GetNextNodeId();
+                    int newNodeId = CurrentChatTree!.GetNextNodeId();
                     ChatTreeNode newNode = new ChatTreeNode(SelectedNode.Node, userMessage, newNodeId);
                     newNodeVM = SelectedNode.AddChild(newNode);
                     CurrentChatTree.IsModified = true;  // 标记未保存更改
@@ -151,6 +161,7 @@ namespace TreeChat.ViewModels
                     ChatTreeChanged?.Invoke(SelectedNode, newNodeVM);
                     SelectedNode = newNodeVM;
                     AIReply = "";
+                    IsStreaming = true;
 
                     // 通过 Python 后端发送（流式）
                     // 首次发送时自动在 Python 端创建对话树
@@ -202,8 +213,9 @@ namespace TreeChat.ViewModels
                                         if (done?.ReplyMessage != null)
                                         {
                                             SelectedNode.Node.SetAiReply(done.ReplyMessage.Content);
-                                            CurrentChatTree.IsModified = true;  // 标记未保存更改
+                                            CurrentChatTree!.IsModified = true;  // 标记未保存更改
                                         }
+                                        IsStreaming = false;
                                         // 触发树更新
                                         ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
                                     });
@@ -220,6 +232,7 @@ namespace TreeChat.ViewModels
                                         previousSelected.RemoveChild(newNodeVM);
                                         SelectedNode = previousSelected;
                                         ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
+                                        IsStreaming = false;
                                         AIReply = string.Empty;
                                         MessageBox.Show(
                                             error?.Message ?? "AI 调用失败。",
@@ -242,6 +255,7 @@ namespace TreeChat.ViewModels
                     SelectedNode = previousSelected;
                     ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
                     AIReply = string.Empty;
+                    IsStreaming = false;
 
                     // 第一次失败时尝试重启后端
                     if (attempt == 1)
@@ -271,6 +285,7 @@ namespace TreeChat.ViewModels
                     SelectedNode = previousSelected;
                     ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
                     AIReply = string.Empty;
+                    IsStreaming = false;
                     MessageBox.Show($"请求过程中发生错误：{ex.Message}",
                         "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;

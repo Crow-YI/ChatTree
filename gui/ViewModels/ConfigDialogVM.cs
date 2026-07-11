@@ -146,7 +146,7 @@ namespace TreeChat.ViewModels
         public RelayCommand ConfirmCommand { get; }
         public RelayCommand CancelCommand { get; }
 
-        public event Action<bool?> CloseRequest;
+        public event Action<bool?>? CloseRequest;
 
         /// <summary>
         /// 构造函数。

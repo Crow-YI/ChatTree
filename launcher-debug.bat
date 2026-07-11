@@ -68,7 +68,7 @@ cd /d "%~dp0gui"
 
 REM 始终重新编译以确保使用最新代码
 echo    [..] dotnet build ...
-dotnet build >nul 2>&1
+dotnet build
 if %ERRORLEVEL% NEQ 0 (
     echo    [FAIL] WPF 编译失败
     pause

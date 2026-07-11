@@ -91,7 +91,7 @@ if exist "gui\bin\Release\net8.0-windows\TreeChat.exe" (
     echo     [..] WPF 尚未编译
     echo     [..] 正在编译...
     cd /d "%~dp0gui"
-    dotnet build -c Release >nul 2>&1
+    dotnet build -c Release
     if !ERRORLEVEL! EQU 0 (
         echo     [OK] WPF 编译成功
     ) else (
