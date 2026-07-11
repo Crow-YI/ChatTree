@@ -3,6 +3,7 @@ using System.Windows;
 using TreeChat.Commands;
 using TreeChat.Infrastructure;
 using TreeChat.Models;
+using TreeChat.Services;
 
 namespace TreeChat.ViewModels
 {
@@ -178,7 +179,8 @@ namespace TreeChat.ViewModels
                     string fullContent = "";
                     // 在后台线程上消费 SSE 流，避免阻塞 UI 线程渲染
                     var sseEvents = backend.ChatStreamAsync(
-                        treeId, previousSelected.Node.NodeID, userMessage);
+                        treeId, previousSelected.Node.NodeID, userMessage,
+                        profileName: ApiConfig.ActiveProfileName);
                     await Task.Run(async () =>
                     {
                         await foreach (var sseEvent in sseEvents)

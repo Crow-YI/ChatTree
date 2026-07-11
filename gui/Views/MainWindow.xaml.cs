@@ -90,8 +90,8 @@ namespace TreeChat.Views
 
                 if (result == MessageBoxResult.Yes)
                 {
-                    // 关闭时同步等待保存完成（写入量极小，毫秒级）
-                    _vm.SaveAsync().GetAwaiter().GetResult();
+                    // 使用同步保存，避免在 WPF OnClosing 事件中阻塞等待 async 续体导致死锁
+                    _vm.Save();
                 }
                 else if (result == MessageBoxResult.Cancel)
                 {

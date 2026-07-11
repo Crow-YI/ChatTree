@@ -250,9 +250,14 @@ class Settings(BaseModel):
             if hasattr(profile, key) and value is not None:
                 setattr(profile, key, value)
 
-        # 如果更新的是激活中的 profile，同步到 flat 字段
+        # 如果更新的是激活中的 profile，同步到 flat 字段并清理 LLM 缓存
         if name == self.active_profile:
             self._sync_active_profile_to_fields()
+            # 清理 LLM 客户端缓存，强制使用新凭证重建
+            from ..services.llm_service import llm_service
+
+            llm_service._instances.clear()
+            logger.info("LLM client cache cleared due to profile update")
 
         self.save_config_file()
         return profile

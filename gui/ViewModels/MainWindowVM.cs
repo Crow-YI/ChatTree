@@ -141,6 +141,18 @@ namespace TreeChat.ViewModels
         }
 
         /// <summary>
+        /// 同步保存（用于 OnClosing 等无法使用 async/await 的上下文）。
+        /// 保存内容很小，同步写入不会造成可感知的阻塞。
+        /// </summary>
+        public void Save()
+        {
+            if (CurrentChatTree != null)
+            {
+                _fileService.SaveChatTree(CurrentChatTree);
+            }
+        }
+
+        /// <summary>
         /// 启动自动保存定时器（10 分钟间隔）
         /// </summary>
         private void StartAutoSave()

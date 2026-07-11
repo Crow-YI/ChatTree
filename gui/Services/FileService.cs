@@ -104,7 +104,7 @@ namespace TreeChat.Services
                 return SaveChatTreeAs(chatTree);
             }
 
-            return await SaveToPathAsync(chatTree, chatTree.FilePath);
+            return await SaveToPathAsync(chatTree, chatTree.FilePath).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -117,7 +117,7 @@ namespace TreeChat.Services
                 return false;
 
             // 对话框已设置 chatTree.FilePath，异步写入
-            return await SaveToPathAsync(chatTree, chatTree.FilePath!);
+            return await SaveToPathAsync(chatTree, chatTree.FilePath!).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -129,7 +129,7 @@ namespace TreeChat.Services
             {
                 chatTree.FilePath = filePath;
                 var json = _serializationService.SerializeChatTree(chatTree);
-                await File.WriteAllTextAsync(filePath, json);
+                await File.WriteAllTextAsync(filePath, json).ConfigureAwait(false);
                 chatTree.IsModified = false;
                 AppLogger.Info("Chat saved (async): {Path}", filePath);
                 return true;
