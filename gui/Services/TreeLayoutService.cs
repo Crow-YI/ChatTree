@@ -7,12 +7,15 @@ namespace TreeChat.Services
     /// </summary>
     public static class TreeLayoutService
     {
-        private const double HorizontalSpacing = 60;
+        private const double HorizontalSpacing = 30;
         private const double VerticalSpacing = 60;
         private const double MinNodeWidth = 80;
         private const double CharWidth = 12;
 
-        private static double CalculateNodeWidth(TreeNodeVM node)
+        /// <summary>
+        /// 根据节点文本内容计算节点宽度。
+        /// </summary>
+        public static double CalculateNodeWidth(TreeNodeVM node)
         {
             string nodeName = node.DisplayContent ?? "";
             double width = nodeName.Length * CharWidth;

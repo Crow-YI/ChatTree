@@ -128,6 +128,9 @@
                              SelectedItems="{Binding SelectedItems}"
                              CanSelectMultipleItems="False"
                              AllowDrop="True"
+                             PreviewMouseLeftButtonDown="Editor_PreviewMouseLeftButtonDown"
+                             PreviewMouseMove="Editor_PreviewMouseMove"
+                             PreviewMouseLeftButtonUp="Editor_PreviewMouseLeftButtonUp"
                              DragEnter="ScrollViewer_DragEnter"
                              DragOver="ScrollViewer_DragOver"
                              Drop="ScrollViewer_Drop">

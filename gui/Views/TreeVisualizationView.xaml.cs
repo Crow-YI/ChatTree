@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Nodify;
 using TreeChat.ViewModels;
 
@@ -8,6 +9,9 @@ namespace TreeChat.Views
     public partial class TreeVisualizationView : UserControl
     {
         private TreeVisualizationVM? _vm;
+        private Point _panStartPoint;
+        private Point _panStartViewport;
+        private bool _isPanning;
 
         /// <summary>
         /// 文件拖放事件，参数为文件路径
@@ -34,7 +38,7 @@ namespace TreeChat.Views
         }
 
         /// <summary>
-        /// 树渲染完成后自动适配视图，使所有节点居中可见
+        /// 树渲染完成后自动适配视图，使所有节点居中可见。
         /// </summary>
         private void OnTreeRendered()
         {
@@ -42,6 +46,10 @@ namespace TreeChat.Views
 
             try
             {
+                // 禁用 Nodify 默认中键/右键平移和边缘滚动
+                editor.DisablePanning = true;
+                editor.DisableAutoPanning = true;
+
                 // 计算所有节点的包围盒
                 double minX = double.MaxValue, minY = double.MaxValue;
                 double maxX = double.MinValue, maxY = double.MinValue;
@@ -71,7 +79,52 @@ namespace TreeChat.Views
             catch { }
         }
 
-        // 文件拖放处理
+        // ==================== 左键拖拽平移 ====================
+
+        private void Editor_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _panStartPoint = e.GetPosition(editor);
+            _panStartViewport = editor.ViewportLocation;
+            _isPanning = false;
+        }
+
+        private void Editor_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed)
+            {
+                _isPanning = false;
+                return;
+            }
+
+            Point currentPos = e.GetPosition(editor);
+            Vector delta = currentPos - _panStartPoint;
+
+            // 移动超过阈值后进入平移模式（防止误触节点选择）
+            if (!_isPanning && (Math.Abs(delta.X) > 5 || Math.Abs(delta.Y) > 5))
+            {
+                _isPanning = true;
+                editor.Cursor = Cursors.Hand;
+            }
+
+            if (_isPanning)
+            {
+                editor.ViewportLocation = new Point(
+                    _panStartViewport.X - delta.X,
+                    _panStartViewport.Y - delta.Y);
+            }
+        }
+
+        private void Editor_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_isPanning)
+            {
+                editor.Cursor = Cursors.Arrow;
+            }
+            _isPanning = false;
+        }
+
+        // ==================== 文件拖放 ====================
+
         private void ScrollViewer_DragEnter(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
@@ -103,4 +156,4 @@ namespace TreeChat.Views
             e.Handled = true;
         }
     }
-}
+}
