@@ -59,7 +59,11 @@ namespace TreeChat.ViewModels
         public bool IsStreaming
         {
             get => _isStreaming;
-            set => SetProperty(ref _isStreaming, value);
+            set
+            {
+                if (SetProperty(ref _isStreaming, value))
+                    SendMessage.OnCanExecuteChanged();
+            }
         }
 
         private string _inputMessage = string.Empty;
@@ -127,7 +131,10 @@ namespace TreeChat.ViewModels
 
         private bool CanExecuteSendMessage(object? parameter)
         {
-            return !string.IsNullOrEmpty(InputMessage) && SelectedNode != null && CurrentChatTree != null;
+            return !IsStreaming
+                && !string.IsNullOrEmpty(InputMessage)
+                && SelectedNode != null
+                && CurrentChatTree != null;
         }
 
         private async Task ExecuteSendMessageAsync(object? parameter)
@@ -214,12 +221,12 @@ namespace TreeChat.ViewModels
                                     {
                                         if (done?.ReplyMessage != null)
                                         {
-                                            SelectedNode.Node.SetAiReply(done.ReplyMessage.Content);
+                                            newNodeVM!.Node.SetAiReply(done.ReplyMessage.Content);
                                             CurrentChatTree!.IsModified = true;  // 标记未保存更改
                                         }
                                         IsStreaming = false;
-                                        // 触发树更新
-                                        ChatTreeChanged?.Invoke(SelectedNode, SelectedNode);
+                                        // 触发树更新（使用 newNodeVM 作为更新起点，保持用户当前选中不变）
+                                        ChatTreeChanged?.Invoke(newNodeVM!, SelectedNode);
                                     });
                                     return;
 
