@@ -1,5 +1,5 @@
 using System.Windows;
-using TreeChat.Services;
+using TreeChat.Models;
 using TreeChat.ViewModels;
 
 namespace TreeChat.Views
@@ -8,12 +8,14 @@ namespace TreeChat.Views
     {
         public ConfigDialogViewModel ViewModel { get; }
 
-        public ConfigDialog()
+        /// <summary>
+        /// 创建/编辑模型配置。
+        /// </summary>
+        /// <param name="existing">null 表示新建，非 null 表示编辑已有 profile</param>
+        public ConfigDialog(ProfileData? existing = null)
         {
             InitializeComponent();
-            ViewModel = new ConfigDialogViewModel(
-                ApiConfig.ApiKey, ApiConfig.ApiEndpoint, ApiConfig.ModelName,
-                ApiConfig.Temperature, ApiConfig.TopP, ApiConfig.MaxTokens);
+            ViewModel = new ConfigDialogViewModel(existing);
             DataContext = ViewModel;
             ViewModel.CloseRequest += result =>
             {
@@ -21,13 +23,5 @@ namespace TreeChat.Views
                 Close();
             };
         }
-
-        // 对外暴露配置值（供调用方读取）
-        public string ApiKey => ViewModel.ApiKey;
-        public string ApiEndpoint => ViewModel.ApiEndpoint;
-        public string ModelName => ViewModel.ModelName;
-        public double Temperature => ViewModel.Temperature;
-        public double TopP => ViewModel.TopP;
-        public int MaxTokens => ViewModel.MaxTokens;
     }
 }

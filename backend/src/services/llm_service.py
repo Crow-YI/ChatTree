@@ -12,7 +12,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from openai import APIStatusError
 
-from ..core.config import settings
+from ..core.config import settings, LLMProviderConfig
 from ..core.errors import LLMError
 
 logger = logging.getLogger(__name__)
@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 class LLMService:
     """基于 LangChain ChatOpenAI 的 LLM 服务。
 
-    通过 OpenAI 兼容接口接入 DeepSeek V4 API，
-    并为后续添加更多供应商保留扩展点。
+    通过 OpenAI 兼容接口接入各供应商 API，
+    支持多 Profile 切换和按请求 profile 覆盖。
     """
 
     def __init__(self) -> None:
@@ -34,15 +34,43 @@ class LLMService:
         temperature: float | None = None,
         top_p: float | None = None,
         max_tokens: int | None = None,
+        profile_name: str | None = None,
     ) -> BaseChatModel:
         """获取或创建 LangChain 聊天模型实例。
 
         按 (provider, model) 缓存已创建的实例，
         支持按请求覆盖 temperature/top_p/max_tokens（通过 bind）。
+
+        当 profile_name 传入时，使用该 profile 的凭证和默认参数；
+        否则使用 Settings 中激活的 profile。
         """
-        model_name = model or settings.model
-        provider = self._resolve_provider(model_name)
-        cfg = settings.get_provider_config(provider)
+        if profile_name:
+            profile = settings.get_profile(profile_name)
+            if profile is None:
+                raise LLMError(
+                    key="ConfigError",
+                    message=f"Profile '{profile_name}' 不存在",
+                    detail=f"Unknown profile: {profile_name}",
+                    status_code=400,
+                )
+            provider = self._resolve_provider(profile.model)
+            cfg = LLMProviderConfig(
+                api_key=profile.api_key,
+                api_base=profile.api_endpoint,
+                model=profile.model,
+                timeout_seconds=120,
+            )
+            model_name = model or profile.model
+            use_temp = temperature if temperature is not None else profile.temperature
+            use_top_p = top_p if top_p is not None else profile.top_p
+            use_max_tokens = max_tokens if max_tokens is not None else profile.max_tokens
+        else:
+            model_name = model or settings.model
+            provider = self._resolve_provider(model_name)
+            cfg = settings.get_provider_config(provider)
+            use_temp = temperature if temperature is not None else settings.temperature
+            use_top_p = top_p if top_p is not None else settings.top_p
+            use_max_tokens = max_tokens if max_tokens is not None else settings.max_tokens
 
         cache_key = f"{provider}:{model_name}"
         if cache_key not in self._instances:
@@ -51,9 +79,9 @@ class LLMService:
                 api_key=cfg.api_key,
                 base_url=cfg.api_base,
                 timeout=cfg.timeout_seconds,
-                temperature=settings.temperature,
-                top_p=settings.top_p,
-                max_tokens=settings.max_tokens,
+                temperature=use_temp,
+                top_p=use_top_p,
+                max_tokens=use_max_tokens,
             )
 
         client = self._instances[cache_key]
@@ -80,6 +108,7 @@ class LLMService:
     async def chat(
         self,
         messages: list[BaseMessage],
+        profile_name: str | None = None,
         model: str | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
@@ -88,9 +117,13 @@ class LLMService:
         """非流式聊天。返回完整回复文本。"""
         model_name = model or settings.model
         client = self._get_client(
-            model=model, temperature=temperature, top_p=top_p, max_tokens=max_tokens,
+            model=model, temperature=temperature, top_p=top_p,
+            max_tokens=max_tokens, profile_name=profile_name,
         )
-        logger.info("LLM chat start: model=%s messages=%d", model_name, len(messages))
+        logger.info(
+            "LLM chat start: model=%s profile=%s messages=%d",
+            model_name, profile_name or "(active)", len(messages),
+        )
         start = time.monotonic()
         try:
             response = await client.ainvoke(messages)
@@ -117,6 +150,7 @@ class LLMService:
     async def astream(
         self,
         messages: list[BaseMessage],
+        profile_name: str | None = None,
         model: str | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
@@ -125,14 +159,16 @@ class LLMService:
         """流式聊天。逐 token 产出内容字符串。
 
         直接接受 LangChain BaseMessage 列表（无需 dict 转换）。
+        支持按请求指定 profile_name 以使用不同配置。
         """
         model_name = model or settings.model
         client = self._get_client(
-            model=model, temperature=temperature, top_p=top_p, max_tokens=max_tokens,
+            model=model, temperature=temperature, top_p=top_p,
+            max_tokens=max_tokens, profile_name=profile_name,
         )
         logger.info(
-            "LLM astream start: model=%s messages=%d",
-            model_name, len(messages),
+            "LLM astream start: model=%s profile=%s messages=%d",
+            model_name, profile_name or "(active)", len(messages),
         )
         start = time.monotonic()
         tokens = 0

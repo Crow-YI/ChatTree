@@ -57,31 +57,23 @@ echo    请检查 backend/.env 中的 API Key 是否已配置
 pause
 exit /b 1
 
-REM 4. 启动 WPF 前端
+REM 4. 编译并启动 WPF 前端
 :launch_gui
-echo    [..] 正在启动 WPF 前端...
+echo    [..] 正在编译 WPF 前端...
 echo.
 cd /d "%~dp0gui"
 
-REM 检查是否已编译
-if not exist "bin\Release\net8.0-windows\TreeChat.exe" (
-    if not exist "bin\Debug\net8.0-windows\TreeChat.dll" (
-        echo    [..] 首次运行，正在编译 WPF 项目...
-        dotnet build -c Release >nul 2>&1
-        if %ERRORLEVEL% NEQ 0 (
-            echo    [FAIL] WPF 编译失败
-            pause
-            exit /b 1
-        )
-    )
+REM 始终重新编译以确保使用最新代码
+echo    [..] dotnet build -c Release ...
+dotnet build -c Release >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo    [FAIL] WPF 编译失败
+    pause
+    exit /b 1
 )
 
-REM 优先运行 Release，其次 Debug
-if exist "bin\Release\net8.0-windows\TreeChat.exe" (
-    start "TreeChat" "bin\Release\net8.0-windows\TreeChat.exe"
-) else (
-    start "TreeChat" dotnet run
-)
+echo    [..] 正在启动 WPF 前端...
+start "TreeChat" "bin\Release\net8.0-windows\TreeChat.exe"
 
 echo    TreeChat 已启动！
 echo.

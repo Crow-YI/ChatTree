@@ -6,12 +6,15 @@ namespace TreeChat.Services
 {
     /// <summary>
     /// 全局配置单例。持久化到项目根目录的 config.json。
-    /// 写入时使用 snake_case 命名，与 Python 后端的 config.json 格式一致。
-    /// 若 config.json 不存在，自动从 config.example.json 复制初始化。
+    /// 支持 v2 profiles 格式（多个配置画像）和 v1 旧平面格式自动迁移。
     /// </summary>
     public static class ApiConfig
     {
-        // ---- 用户配置字段 ----
+        // ---- Profile 数据（v2） ----
+        public static List<ProfileData> Profiles { get; private set; } = new();
+        public static string ActiveProfileName { get; set; } = "default";
+
+        // ---- 旧有字段（v1 兼容，从激活 profile 同步填充）----
         public static string ApiKey = "";
         public static string ApiEndpoint = "https://api.deepseek.com";
         public static string ModelName = "deepseek-v4-flash";
@@ -30,6 +33,26 @@ namespace TreeChat.Services
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
             PropertyNameCaseInsensitive = true,
         };
+
+        // ---- 内部 Profile 数据类（无 JSON 属性，与 ApiModels.ProfileData 区分）----
+
+        public class ProfileData
+        {
+            public string Name { get; set; } = "default";
+            public string Provider { get; set; } = "deepseek";
+            public string ApiKey { get; set; } = "";
+            public string ApiEndpoint { get; set; } = "https://api.deepseek.com";
+            public string Model { get; set; } = "deepseek-v4-flash";
+            public double Temperature { get; set; } = 0.7;
+            public double TopP { get; set; } = 0.8;
+            public int MaxTokens { get; set; } = 800;
+        }
+
+        /// <summary>
+        /// 获取当前激活的 profile。
+        /// </summary>
+        public static ProfileData? GetActiveProfile() =>
+            Profiles.FirstOrDefault(p => p.Name == ActiveProfileName);
 
         /// <summary>
         /// 查找项目根目录（先找 backend/，再取其父目录）。
@@ -84,7 +107,7 @@ namespace TreeChat.Services
 
         /// <summary>
         /// 从 config.json 加载配置。
-        /// 若文件不存在，优先从 config.example.json 复制，回退到代码默认值。
+        /// 自动检测 v1（平面格式）并迁移到 v2（profiles 格式）。
         /// </summary>
         public static void LoadFromFile()
         {
@@ -104,32 +127,129 @@ namespace TreeChat.Services
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
-                if (root.TryGetProperty("api_key", out var apiKey))
-                    ApiKey = apiKey.GetString() ?? "";
-                if (root.TryGetProperty("api_endpoint", out var endpoint))
-                    ApiEndpoint = endpoint.GetString() ?? "https://api.deepseek.com";
-                if (root.TryGetProperty("model", out var model))
-                    ModelName = model.GetString() ?? "deepseek-v4-flash";
-                if (root.TryGetProperty("temperature", out var temp))
-                    Temperature = temp.GetDouble();
-                if (root.TryGetProperty("top_p", out var topP))
-                    TopP = topP.GetDouble();
-                if (root.TryGetProperty("max_tokens", out var maxTokens))
-                    MaxTokens = maxTokens.GetInt32();
-                if (root.TryGetProperty("debug_logging", out var debugLogging))
-                    EnableDebugLogging = debugLogging.GetBoolean();
-
-                // 日志中脱敏 API Key（仅保留末4位）
-                var masked = string.IsNullOrEmpty(ApiKey)
-                    ? "(empty)"
-                    : new string('*', ApiKey.Length - 4) + ApiKey[^4..];
-                AppLogger.Info("Config loaded from: {Path} (model={Model}, apiKey={ApiKey})",
-                    path, ModelName, masked);
+                // 检测格式：有 "profiles" 键 → v2；否则 → v1 迁移
+                if (root.TryGetProperty("profiles", out _))
+                {
+                    LoadV2Format(root);
+                }
+                else
+                {
+                    AppLogger.Info("Detected v1 config format, migrating to v2…");
+                    MigrateV1ToV2(root, path);
+                    // 迁移后重新加载
+                    json = File.ReadAllText(path);
+                    using var doc2 = JsonDocument.Parse(json);
+                    LoadV2Format(doc2.RootElement);
+                }
             }
             catch (Exception ex)
             {
                 AppLogger.Warn(ex, "Failed to load config from {Path}", path);
             }
+        }
+
+        /// <summary>
+        /// 解析 v2 格式（profiles 数组 + active_profile）。
+        /// </summary>
+        private static void LoadV2Format(JsonElement root)
+        {
+            if (root.TryGetProperty("active_profile", out var activeElem))
+                ActiveProfileName = activeElem.GetString() ?? "default";
+
+            if (root.TryGetProperty("profiles", out var profilesElem))
+            {
+                Profiles.Clear();
+                foreach (var p in profilesElem.EnumerateArray())
+                {
+                    Profiles.Add(new ProfileData
+                    {
+                        Name = p.TryGetProperty("name", out var n) ? n.GetString() ?? "default" : "default",
+                        Provider = p.TryGetProperty("provider", out var prv) ? prv.GetString() ?? "deepseek" : "deepseek",
+                        ApiKey = p.TryGetProperty("api_key", out var ak) ? ak.GetString() ?? "" : "",
+                        ApiEndpoint = p.TryGetProperty("api_endpoint", out var ep) ? ep.GetString() ?? "https://api.deepseek.com" : "https://api.deepseek.com",
+                        Model = p.TryGetProperty("model", out var m) ? m.GetString() ?? "deepseek-v4-flash" : "deepseek-v4-flash",
+                        Temperature = p.TryGetProperty("temperature", out var t) ? t.GetDouble() : 0.7,
+                        TopP = p.TryGetProperty("top_p", out var tp) ? tp.GetDouble() : 0.8,
+                        MaxTokens = p.TryGetProperty("max_tokens", out var mt) ? mt.GetInt32() : 800,
+                    });
+                }
+            }
+
+            // 确保 active_profile 有效
+            if (!Profiles.Any(p => p.Name == ActiveProfileName) && Profiles.Count > 0)
+                ActiveProfileName = Profiles[0].Name;
+
+            // 同步到旧有字段
+            SyncActiveToLegacyFields();
+
+            var masked = string.IsNullOrEmpty(ApiKey)
+                ? "(empty)"
+                : new string('*', ApiKey.Length - 4) + ApiKey[^4..];
+            AppLogger.Info(
+                "Config loaded (v2): profiles={Count} active={Active} apiKey={ApiKey}",
+                Profiles.Count, ActiveProfileName, masked);
+        }
+
+        /// <summary>
+        /// 将 v1 平面配置迁移到 v2 profiles 格式并写回。
+        /// </summary>
+        private static void MigrateV1ToV2(JsonElement root, string configPath)
+        {
+            var apiKey = root.TryGetProperty("api_key", out var ak) ? ak.GetString() ?? "" : "";
+            var apiEndpoint = root.TryGetProperty("api_endpoint", out var ep) ? ep.GetString() ?? "https://api.deepseek.com" : "https://api.deepseek.com";
+            var model = root.TryGetProperty("model", out var m) ? m.GetString() ?? "deepseek-v4-flash" : "deepseek-v4-flash";
+            var temperature = root.TryGetProperty("temperature", out var t) ? t.GetDouble() : 0.7;
+            var topP = root.TryGetProperty("top_p", out var tp) ? tp.GetDouble() : 0.8;
+            var maxTokens = root.TryGetProperty("max_tokens", out var mt) ? mt.GetInt32() : 800;
+
+            var profiles = new[]
+            {
+                new
+                {
+                    name = "default",
+                    provider = "deepseek",
+                    api_key = apiKey,
+                    api_endpoint = apiEndpoint,
+                    model = model,
+                    temperature = temperature,
+                    top_p = topP,
+                    max_tokens = maxTokens,
+                }
+            };
+
+            var newData = new
+            {
+                version = 2,
+                active_profile = "default",
+                profiles = profiles,
+            };
+
+            try
+            {
+                string json = JsonSerializer.Serialize(newData, JsonOptions);
+                File.WriteAllText(configPath, json);
+                AppLogger.Info("Migrated config.json v1 → v2");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn(ex, "Failed to write migrated config.json");
+            }
+        }
+
+        /// <summary>
+        /// 将激活 profile 的值同步到旧有静态字段。
+        /// </summary>
+        private static void SyncActiveToLegacyFields()
+        {
+            var active = GetActiveProfile();
+            if (active == null) return;
+
+            ApiKey = active.ApiKey;
+            ApiEndpoint = active.ApiEndpoint;
+            ModelName = active.Model;
+            Temperature = active.Temperature;
+            TopP = active.TopP;
+            MaxTokens = active.MaxTokens;
         }
 
         /// <summary>
@@ -157,7 +277,7 @@ namespace TreeChat.Services
         }
 
         /// <summary>
-        /// 保存当前配置到 config.json。
+        /// 保存当前配置到 config.json（v2 格式）。
         /// </summary>
         public static void SaveToFile()
         {
@@ -166,15 +286,38 @@ namespace TreeChat.Services
 
             try
             {
+                // 确保 Profiles 列表中至少有一个 profile
+                if (Profiles.Count == 0)
+                {
+                    Profiles.Add(new ProfileData
+                    {
+                        Name = "default",
+                        Provider = "deepseek",
+                        ApiKey = ApiKey,
+                        ApiEndpoint = ApiEndpoint,
+                        Model = ModelName,
+                        Temperature = Temperature,
+                        TopP = TopP,
+                        MaxTokens = MaxTokens,
+                    });
+                    ActiveProfileName = "default";
+                }
+
                 var data = new
                 {
-                    api_key = ApiKey,
-                    api_endpoint = ApiEndpoint,
-                    model = ModelName,
-                    temperature = Temperature,
-                    top_p = TopP,
-                    max_tokens = MaxTokens,
-                    debug_logging = EnableDebugLogging,
+                    version = 2,
+                    active_profile = ActiveProfileName,
+                    profiles = Profiles.Select(p => new
+                    {
+                        name = p.Name,
+                        provider = p.Provider,
+                        api_key = p.ApiKey,
+                        api_endpoint = p.ApiEndpoint,
+                        model = p.Model,
+                        temperature = p.Temperature,
+                        top_p = p.TopP,
+                        max_tokens = p.MaxTokens,
+                    }).ToList(),
                 };
 
                 string json = JsonSerializer.Serialize(data, JsonOptions);
@@ -182,7 +325,7 @@ namespace TreeChat.Services
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
                 File.WriteAllText(path, json);
-                AppLogger.Info("Config saved to: {Path}", path);
+                AppLogger.Info("Config saved to: {Path} (profiles={Count})", path, Profiles.Count);
             }
             catch (Exception ex)
             {

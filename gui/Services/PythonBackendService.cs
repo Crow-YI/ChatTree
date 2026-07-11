@@ -429,12 +429,14 @@ namespace TreeChat.Services
         public async IAsyncEnumerable<SseEvent> ChatStreamAsync(
             string treeId, int parentNodeId, string message,
             ChatConfigData? config = null,
+            string? profileName = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             var requestBody = new ChatRequest
             {
                 ParentNodeId = parentNodeId,
                 Message = message,
+                ProfileName = profileName,
             };
 
             if (config != null)
@@ -511,6 +513,43 @@ namespace TreeChat.Services
         {
             AppLogger.Debug("PushConfig: model={Model}", config.Model);
             return PutAsync<ApiSuccessResponse>("/api/v1/config", config);
+        }
+
+        // ==================== Profile Management ====================
+
+        public Task<ProfileListResponse> GetProfilesAsync()
+        {
+            return GetAsync<ProfileListResponse>("/api/v1/profiles")!;
+        }
+
+        public Task<ProfileData> GetProfileAsync(string name)
+        {
+            AppLogger.Debug("GetProfile: name={Name}", name);
+            return GetAsync<ProfileData>($"/api/v1/profiles/{name}")!;
+        }
+
+        public Task<ProfileData> CreateProfileAsync(ProfileData profile)
+        {
+            AppLogger.Info("CreateProfile: name={Name} provider={Provider}", profile.Name, profile.Provider);
+            return PostAsync<ProfileData>("/api/v1/profiles", profile);
+        }
+
+        public Task<ProfileData> UpdateProfileAsync(string name, ProfileData profile)
+        {
+            AppLogger.Info("UpdateProfile: name={Name}", name);
+            return PutAsync<ProfileData>($"/api/v1/profiles/{name}", profile);
+        }
+
+        public Task<ApiSuccessResponse> DeleteProfileAsync(string name)
+        {
+            AppLogger.Info("DeleteProfile: name={Name}", name);
+            return DeleteAsync<ApiSuccessResponse>($"/api/v1/profiles/{name}");
+        }
+
+        public Task<ActivateProfileResponse> ActivateProfileAsync(string name)
+        {
+            AppLogger.Info("ActivateProfile: name={Name}", name);
+            return PutAsync<ActivateProfileResponse>($"/api/v1/profiles/{name}/activate", new { });
         }
 
         // ==================== File Serialization ====================

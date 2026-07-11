@@ -39,11 +39,13 @@ echo   TreeChat WPF Frontend
 echo ========================================
 echo.
 cd /d "%~dp0gui"
+echo [..] Building Release...
 dotnet build -c Release
 if %ERRORLEVEL% NEQ 0 (
     echo Build failed!
     goto :end
 )
+echo [..] Starting...
 start bin\Release\net8.0-windows\TreeChat.exe
 goto :end
 

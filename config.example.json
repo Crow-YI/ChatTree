@@ -1,8 +1,16 @@
 {
-    "api_key": "",
-    "api_endpoint": "https://api.deepseek.com",
-    "model": "deepseek-v4-flash",
-    "temperature": 0.7,
-    "top_p": 0.8,
-    "max_tokens": 800
+    "version": 2,
+    "active_profile": "default",
+    "profiles": [
+        {
+            "name": "default",
+            "provider": "deepseek",
+            "api_key": "",
+            "api_endpoint": "https://api.deepseek.com",
+            "model": "deepseek-v4-flash",
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "max_tokens": 800
+        }
+    ]
 }

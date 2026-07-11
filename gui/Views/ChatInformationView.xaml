@@ -77,29 +77,29 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Viewbox Grid.Column="0" Width="18" Height="18" VerticalAlignment="Bottom" Margin="0,0,8,9"
-                             ToolTip="消息输入" IsHitTestVisible="False">
-                        <Path Data="M3,3.5 H17 V13.5 H8 L4,17 V13.5 H3 Z M6,7 H14 M6,10 H12"
-                              Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.5"
-                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
-                    </Viewbox>
-                    <TextBox x:Name="InputTextBox" Grid.Column="1"
-                             Text="{Binding InputMessage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             MinHeight="54" MaxHeight="150" Padding="4" BorderThickness="0"
-                             Background="Transparent" TextWrapping="Wrap" AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"
-                             PreviewKeyDown="InputTextBox_PreviewKeyDown"/>
-                    <Button Grid.Column="2" Command="{Binding SendMessage}"
-                            ToolTip="发送消息" Style="{StaticResource PrimaryIconButtonStyle}"
-                            VerticalAlignment="Bottom" Margin="8,0,0,0">
-                        <Viewbox Width="16" Height="16">
-                            <Path Data="M10,17 V3 M4.5,8.5 L10,3 L15.5,8.5"
-                                  Stroke="White" StrokeThickness="1.8"
+                        <Viewbox Grid.Column="0" Width="18" Height="18" VerticalAlignment="Bottom" Margin="0,0,8,9"
+                                 ToolTip="消息输入" IsHitTestVisible="False">
+                            <Path Data="M3,3.5 H17 V13.5 H8 L4,17 V13.5 H3 Z M6,7 H14 M6,10 H12"
+                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.5"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                         </Viewbox>
-                    </Button>
-                </Grid>
-            </Border>
+                        <TextBox x:Name="InputTextBox" Grid.Column="1"
+                                 Text="{Binding InputMessage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 MinHeight="54" MaxHeight="150" Padding="4" BorderThickness="0"
+                                 Background="Transparent" TextWrapping="Wrap" AcceptsReturn="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 PreviewKeyDown="InputTextBox_PreviewKeyDown"/>
+                        <Button Grid.Column="2" Command="{Binding SendMessage}"
+                                ToolTip="发送消息" Style="{StaticResource PrimaryIconButtonStyle}"
+                                VerticalAlignment="Bottom" Margin="8,0,0,0">
+                            <Viewbox Width="16" Height="16">
+                                <Path Data="M10,17 V3 M4.5,8.5 L10,3 L15.5,8.5"
+                                      Stroke="White" StrokeThickness="1.8"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            </Viewbox>
+                        </Button>
+                    </Grid>
+                </Border>
         </Border>
     </Grid>
 </UserControl>

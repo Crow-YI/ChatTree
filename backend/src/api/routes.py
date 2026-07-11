@@ -15,9 +15,11 @@ from starlette.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from ..core.config import settings
+from ..core.config import ProfileData as CoreProfileData
 from ..core.errors import (
     TreeChatError,
     LLMError,
+    ConfigError,
     TreeNotFoundError,
     NodeNotFoundError,
 )
@@ -36,6 +38,9 @@ from .schemas import (
     ChatRequest,
     RenameNodeRequest,
     ConfigData,
+    ProfileData,
+    ProfileListResponse,
+    ActivateProfileResponse,
     ErrorDetail,
     SuccessResponse,
     HealthResponse,
@@ -229,6 +234,7 @@ async def chat(
             full_content: str = ""
             async for token in llm.astream(
                 messages=context_messages,
+                profile_name=req.profile_name,
                 model=req.model,
                 temperature=req.temperature,
                 top_p=req.top_p,
@@ -320,7 +326,15 @@ async def delete_node(
 
 @router.get("/config", response_model=ConfigData)
 async def get_config() -> ConfigData:
-    """获取当前运行时 LLM 配置。"""
+    """获取当前运行时 LLM 配置（激活 profile 的参数）。"""
+    profile = settings.get_active_profile()
+    if profile:
+        return ConfigData(
+            model=profile.model,
+            temperature=profile.temperature,
+            top_p=profile.top_p,
+            max_tokens=profile.max_tokens,
+        )
     return ConfigData(
         model=settings.model,
         temperature=settings.temperature,
@@ -331,12 +345,89 @@ async def get_config() -> ConfigData:
 
 @router.put("/config", response_model=SuccessResponse)
 async def update_config(req: ConfigData) -> SuccessResponse:
-    """更新运行时 LLM 配置。"""
-    settings.model = req.model
-    settings.temperature = req.temperature
-    settings.top_p = req.top_p
-    settings.max_tokens = req.max_tokens
+    """更新运行时 LLM 配置（更新激活 profile 的参数并持久化）。"""
+    # 更新激活 profile 的运行时参数
+    profile_name = settings.active_profile
+    settings.update_profile(profile_name, {
+        "model": req.model,
+        "temperature": req.temperature,
+        "top_p": req.top_p,
+        "max_tokens": req.max_tokens,
+    })
     return SuccessResponse()
+
+
+# === Profile Management ===
+
+@router.get("/profiles", response_model=ProfileListResponse)
+async def list_profiles() -> ProfileListResponse:
+    """获取所有 profile 列表及激活的 profile 名称。"""
+    return ProfileListResponse(
+        profiles=[ProfileData(**p.model_dump()) for p in settings.profiles],
+        active_profile=settings.active_profile,
+    )
+
+
+@router.get("/profiles/{name}", response_model=ProfileData)
+async def get_profile(name: str) -> ProfileData:
+    """获取单个 profile 详情。"""
+    profile = settings.get_profile(name)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' 不存在")
+    return ProfileData(**profile.model_dump())
+
+
+@router.post("/profiles", response_model=ProfileData, status_code=201)
+async def create_profile(req: ProfileData) -> ProfileData:
+    """创建新 profile。"""
+    try:
+        core_profile = CoreProfileData(**req.model_dump())
+        settings.add_profile(core_profile)
+        return req
+    except ConfigError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.put("/profiles/{name}", response_model=ProfileData)
+async def update_profile(name: str, req: ProfileData) -> ProfileData:
+    """更新指定 profile。"""
+    # 允许通过 URL 中的 name 重命名 profile
+    updates = req.model_dump(exclude={"name"}, exclude_none=True)
+    try:
+        updated = settings.update_profile(name, updates)
+        return ProfileData(**updated.model_dump())
+    except ConfigError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/profiles/{name}", response_model=SuccessResponse)
+async def delete_profile(name: str) -> SuccessResponse:
+    """删除指定 profile。禁止删除激活中的 profile。"""
+    try:
+        settings.delete_profile(name)
+        return SuccessResponse()
+    except ConfigError as e:
+        if "激活" in str(e):
+            raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/profiles/{name}/activate", response_model=ActivateProfileResponse)
+async def activate_profile(name: str) -> ActivateProfileResponse:
+    """激活指定 profile。"""
+    try:
+        profile = settings.set_active_profile(name)
+        return ActivateProfileResponse(
+            active_profile=profile.name,
+            config=ConfigData(
+                model=profile.model,
+                temperature=profile.temperature,
+                top_p=profile.top_p,
+                max_tokens=profile.max_tokens,
+            ),
+        )
+    except ConfigError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # === File Serialization ===

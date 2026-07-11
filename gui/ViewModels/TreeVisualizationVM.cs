@@ -41,7 +41,6 @@ namespace TreeChat.ViewModels
                         value.IsSelected = true;
                         SelectedNodeChanged?.Invoke(value);
                     }
-                    RenameNodeCommand?.OnCanExecuteChanged();
                 }
             }
         }
@@ -68,9 +67,22 @@ namespace TreeChat.ViewModels
         /// </summary>
         public ObservableCollection<object> SelectedItems { get; } = new();
 
-        public RelayCommand ShowConfigCommand { get; }
-        public RelayCommand RenameNodeCommand { get; }
+        // ---- 原命令（仅保留 SelectNodeCommand）----
+
         public RelayCommand SelectNodeCommand { get; }
+
+        // ---- 模型配置下拉框 ----
+
+        public ObservableCollection<DropdownProfileItem> DropdownProfiles { get; } = new();
+
+        private string _activeProfileDisplay = "";
+        public string ActiveProfileDisplay
+        {
+            get => _activeProfileDisplay;
+            set => SetProperty(ref _activeProfileDisplay, value);
+        }
+
+        public RelayCommand AddNewProfileCommand { get; }
 
         public event Action<TreeNodeVM>? SelectedNodeChanged;
 
@@ -82,13 +94,121 @@ namespace TreeChat.ViewModels
         public TreeVisualizationVM()
         {
             RootNode = null;
-            ShowConfigCommand = new RelayCommand(ExecuteShowConfig);
-            RenameNodeCommand = new RelayCommand(ExecuteRenameNode, CanExecuteRenameNode);
             SelectNodeCommand = new RelayCommand(ExecuteSelectNode);
+            AddNewProfileCommand = new RelayCommand(_ => ExecuteAddNewProfile());
             SelectedNode = null;
 
             SelectedItems.CollectionChanged += OnSelectedItemsChanged;
+
+            // 初始化下拉框
+            RefreshDropdownProfiles();
         }
+
+        // ================================================================
+        // 模型配置下拉框
+        // ================================================================
+
+        /// <summary>
+        /// 从 ApiConfig 刷新下拉框的 profile 列表。
+        /// </summary>
+        public void RefreshDropdownProfiles()
+        {
+            DropdownProfiles.Clear();
+
+            var active = ApiConfig.GetActiveProfile();
+            ActiveProfileDisplay = active != null
+                ? $"当前: {active.Name} ({active.Provider}) — {active.Model}"
+                : "当前: 未配置";
+
+            foreach (var p in ApiConfig.Profiles)
+            {
+                var item = new DropdownProfileItem
+                {
+                    Name = p.Name,
+                    Provider = p.Provider,
+                    Model = p.Model,
+                    IsActive = p.Name == ApiConfig.ActiveProfileName,
+                };
+                item.ActivateCommand = new RelayCommand(_ => ExecuteActivateProfile(item));
+                item.EditCommand = new RelayCommand(_ => ExecuteEditProfile(item));
+                DropdownProfiles.Add(item);
+            }
+        }
+
+        private async void ExecuteActivateProfile(DropdownProfileItem item)
+        {
+            if (item.Name == ApiConfig.ActiveProfileName) return;
+
+            try
+            {
+                await App.Backend.ActivateProfileAsync(item.Name);
+
+                // 同步本地配置
+                ApiConfig.LoadFromFile();
+
+                // 推送激活 profile 的配置到后端
+                await App.Backend.PushConfigAsync(new ChatConfigData
+                {
+                    Model = ApiConfig.ModelName,
+                    Temperature = ApiConfig.Temperature,
+                    TopP = ApiConfig.TopP,
+                    MaxTokens = ApiConfig.MaxTokens,
+                });
+
+                AppLogger.Info("Profile activated: {Name}", item.Name);
+                RefreshDropdownProfiles();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn(ex, "Failed to activate profile: {Name}", item.Name);
+                MessageBox.Show($"切换配置失败: {ex.Message}", "错误",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ExecuteEditProfile(DropdownProfileItem item)
+        {
+            // 从后端获取完整 profile 数据（含 API Key）
+            _ = OpenEditDialogAsync(item.Name);
+        }
+
+        private async Task OpenEditDialogAsync(string profileName)
+        {
+            try
+            {
+                var detail = await App.Backend.GetProfileAsync(profileName);
+                var dialog = new Views.ConfigDialog(existing: detail);
+
+                if (dialog.ShowDialog() == true)
+                {
+                    AppLogger.Info("Profile edited: {Name}", profileName);
+                    ApiConfig.LoadFromFile();
+                    RefreshDropdownProfiles();
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn(ex, "Failed to edit profile: {Name}", profileName);
+                MessageBox.Show($"加载配置失败: {ex.Message}", "错误",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ExecuteAddNewProfile()
+        {
+            var dialog = new Views.ConfigDialog(existing: null);
+
+            if (dialog.ShowDialog() == true)
+            {
+                AppLogger.Info("New profile created");
+                ApiConfig.LoadFromFile();
+                RefreshDropdownProfiles();
+            }
+        }
+
+        // ================================================================
+        // 选中节点
+        // ================================================================
 
         /// <summary>
         /// NodifyEditor 选中变化时同步到 SelectedNode
@@ -124,80 +244,9 @@ namespace TreeChat.ViewModels
                 SelectedItems.Add(_selectedNode);
         }
 
-        private bool CanExecuteRenameNode(object? parameter)
-        {
-            return SelectedNode != null;
-        }
-
-        private void ExecuteRenameNode(object? parameter)
-        {
-            if (SelectedNode == null)
-                return;
-
-            string currentName = SelectedNode.Node.Name ?? SelectedNode.Node.NodeID.ToString();
-            var dialog = new Views.RenameDialog(currentName);
-            if (dialog.ShowDialog() == true)
-            {
-                string newName = dialog.NewName;
-                if (!string.IsNullOrWhiteSpace(newName))
-                {
-                    AppLogger.Info("Node renamed: tree={TreeId} node={NodeId} name={Name}",
-                        CurrentChatTree?.TreeId, SelectedNode.Node.NodeID, newName);
-                    SelectedNode.Node.Name = newName;
-
-                    // 同步到 Python 后端
-                    if (CurrentChatTree?.TreeId != null)
-                    {
-                        _ = App.Backend.RenameNodeAsync(
-                            CurrentChatTree.TreeId, SelectedNode.Node.NodeID, newName);
-                    }
-
-                    // 重新计算整个树的布局
-                    if (RootNode != null)
-                    {
-                        TreeLayoutService.LayoutTree(RootNode);
-                    }
-                    // 通知UI更新
-                    OnPropertyChanged(nameof(SelectedNode));
-                    RebuildAll(RootNode!);
-                    Application.Current.Dispatcher.InvokeAsync(
-                        SyncSelectedToNodify,
-                        System.Windows.Threading.DispatcherPriority.Background);
-                }
-            }
-        }
-
-        private async void ExecuteShowConfig(object? parameter)
-        {
-            var dialog = new Views.ConfigDialog();
-
-            if (dialog.ShowDialog() == true)
-            {
-                AppLogger.Info("Config updated: model={Model} endpoint={Endpoint}",
-                    dialog.ModelName, dialog.ApiEndpoint);
-                ApiConfig.ApiKey = dialog.ApiKey;
-                ApiConfig.ApiEndpoint = dialog.ApiEndpoint;
-                ApiConfig.ModelName = dialog.ModelName;
-                ApiConfig.Temperature = dialog.Temperature;
-                ApiConfig.TopP = dialog.TopP;
-                ApiConfig.MaxTokens = dialog.MaxTokens;
-
-                ApiConfig.SaveToFile();
-
-                try
-                {
-                    await App.Backend.PushConfigAsync(
-                        new ChatConfigData
-                        {
-                            Model = ApiConfig.ModelName,
-                            Temperature = ApiConfig.Temperature,
-                            TopP = ApiConfig.TopP,
-                            MaxTokens = ApiConfig.MaxTokens,
-                        });
-                }
-                catch { /* 配置同步失败不影响使用 */ }
-            }
-        }
+        // ================================================================
+        // 树操作
+        // ================================================================
 
         /// <summary>
         /// 设置新的对话树，触发布局计算并重建展平列表和连线
@@ -219,6 +268,9 @@ namespace TreeChat.ViewModels
                     SyncSelectedToNodify();
                     TreeRendered?.Invoke();
                 }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
+                // 加载树时刷新 profile 列表
+                RefreshDropdownProfiles();
             }
             catch (Exception ex)
             {
@@ -287,4 +339,50 @@ namespace TreeChat.ViewModels
             }
         }
     }
-}
+
+    // ================================================================
+    // 下拉框 Profile 项
+    // ================================================================
+
+    public class DropdownProfileItem : BaseViewModel
+    {
+        private string _name = "";
+        public string Name
+        {
+            get => _name;
+            set => SetProperty(ref _name, value);
+        }
+
+        private string _provider = "";
+        public string Provider
+        {
+            get => _provider;
+            set => SetProperty(ref _provider, value);
+        }
+
+        private string _model = "";
+        public string Model
+        {
+            get => _model;
+            set => SetProperty(ref _model, value);
+        }
+
+        private bool _isActive;
+        public bool IsActive
+        {
+            get => _isActive;
+            set
+            {
+                if (SetProperty(ref _isActive, value))
+                    OnPropertyChanged(nameof(DisplayText));
+            }
+        }
+
+        public string DisplayText => IsActive
+            ? $"✓ {Name} ({Provider}) — {Model}"
+            : $"  {Name} ({Provider}) — {Model}";
+
+        public RelayCommand? ActivateCommand { get; set; }
+        public RelayCommand? EditCommand { get; set; }
+    }
+}

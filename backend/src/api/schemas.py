@@ -66,6 +66,7 @@ class TreeDetailResponse(BaseModel):
 class ChatRequest(BaseModel):
     parent_node_id: int
     message: str = Field(..., min_length=1)
+    profile_name: str | None = None  # NEW: 指定使用的 profile
     model: str | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -85,6 +86,30 @@ class ConfigData(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     top_p: float = Field(default=0.8, ge=0.0, le=1.0)
     max_tokens: int = Field(default=800, ge=1, le=8192)
+
+
+# === Profile ===
+
+class ProfileData(BaseModel):
+    """配置画像 — 一组完整的模型连接参数。"""
+    name: str
+    provider: str = "deepseek"
+    api_key: str = ""
+    api_endpoint: str = "https://api.deepseek.com"
+    model: str = "deepseek-v4-flash"
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    top_p: float = Field(default=0.8, ge=0.0, le=1.0)
+    max_tokens: int = Field(default=800, ge=1, le=8192)
+
+
+class ProfileListResponse(BaseModel):
+    profiles: list[ProfileData]
+    active_profile: str
+
+
+class ActivateProfileResponse(BaseModel):
+    active_profile: str
+    config: ConfigData
 
 
 # === Error ===

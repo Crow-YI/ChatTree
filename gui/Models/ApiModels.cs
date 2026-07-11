@@ -101,6 +101,10 @@ namespace TreeChat.Models
         [JsonPropertyName("message")]
         public string Message { get; set; } = string.Empty;
 
+        [JsonPropertyName("profile_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ProfileName { get; set; }
+
         [JsonPropertyName("model")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Model { get; set; }
@@ -182,6 +186,53 @@ namespace TreeChat.Models
 
         [JsonPropertyName("max_tokens")]
         public int MaxTokens { get; set; } = 800;
+    }
+
+    // === Profile ===
+
+    public class ProfileData
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+
+        [JsonPropertyName("provider")]
+        public string Provider { get; set; } = "deepseek";
+
+        [JsonPropertyName("api_key")]
+        public string ApiKey { get; set; } = "";
+
+        [JsonPropertyName("api_endpoint")]
+        public string ApiEndpoint { get; set; } = "https://api.deepseek.com";
+
+        [JsonPropertyName("model")]
+        public string Model { get; set; } = "deepseek-v4-flash";
+
+        [JsonPropertyName("temperature")]
+        public double Temperature { get; set; } = 0.7;
+
+        [JsonPropertyName("top_p")]
+        public double TopP { get; set; } = 0.8;
+
+        [JsonPropertyName("max_tokens")]
+        public int MaxTokens { get; set; } = 800;
+    }
+
+    public class ProfileListResponse
+    {
+        [JsonPropertyName("profiles")]
+        public List<ProfileData> Profiles { get; set; } = new();
+
+        [JsonPropertyName("active_profile")]
+        public string ActiveProfile { get; set; } = "";
+    }
+
+    public class ActivateProfileResponse
+    {
+        [JsonPropertyName("active_profile")]
+        public string ActiveProfile { get; set; } = "";
+
+        [JsonPropertyName("config")]
+        public ChatConfigData? Config { get; set; }
     }
 
     // === Generic ===
