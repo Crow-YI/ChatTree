@@ -13,7 +13,7 @@ namespace TreeChat.ViewModels
     /// </summary>
     public class FileViewVM : BaseViewModel
     {
-        private readonly IFileService _fileService;
+        private readonly FileService _fileService;
 
         /// <summary>
         /// 最近打开的文件列表（占位，目前未实现持久化）
@@ -35,7 +35,7 @@ namespace TreeChat.ViewModels
         /// </summary>
         public event Action<ChatTree>? FileCreatedOrOpened;
 
-        public FileViewVM(IFileService fileService)
+        public FileViewVM(FileService fileService)
         {
             _fileService = fileService;
 

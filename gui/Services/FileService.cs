@@ -10,7 +10,7 @@ namespace TreeChat.Services
     /// 文件服务实现类，处理对话树的文件保存和读取操作。
     /// 支持静默保存（FilePath 已设置时）和 Save As 对话框两种模式。
     /// </summary>
-    public class FileService : IFileService
+    public class FileService
     {
         private readonly JsonSerializationService _serializationService;
         private const string FileExtension = ".chat";

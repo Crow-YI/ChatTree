@@ -5,7 +5,7 @@ using TreeChat.Models;
 namespace TreeChat.Services
 {
     /// <summary>
-    /// JSON 序列化服务，处理 ChatTree ↔ ChatTreeData 的映射与序列化。
+    /// JSON 序列化服务，处理 ChatTree ↔ JSON 的映射与序列化。
     /// 使用 System.Text.Json，通过 ChatMessageDataConverter 支持旧格式兼容。
     /// </summary>
     public class JsonSerializationService
@@ -133,73 +133,99 @@ namespace TreeChat.Services
                 CollectNodes(child, result);
             }
         }
-    }
 
-    /// <summary>
-    /// 向后兼容的 ChatMessageData JSON 转换器。
-    /// 支持两种格式：
-    ///   旧格式："消息内容" (string)
-    ///   新格式：{"Role": "user", "Content": "消息内容"} (object)
-    /// </summary>
-    public class ChatMessageDataConverter : JsonConverter<ChatMessageData>
-    {
-        public override ChatMessageData? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        // ======================== 私有嵌套 DTO ========================
+
+        private sealed class ChatTreeData
         {
-            if (reader.TokenType == JsonTokenType.String)
-            {
-                // 旧格式：纯字符串 → 包装为 ChatMessageData
-                return new ChatMessageData { Role = "user", Content = reader.GetString() ?? "" };
-            }
-
-            if (reader.TokenType == JsonTokenType.StartObject)
-            {
-                // 新格式：{Role, Content} 对象（手动解析，避免递归调用 JsonSerializer.Deserialize）
-                string? role = null;
-                string? content = null;
-
-                while (reader.Read())
-                {
-                    if (reader.TokenType == JsonTokenType.EndObject)
-                        break;
-
-                    if (reader.TokenType == JsonTokenType.PropertyName)
-                    {
-                        string propName = reader.GetString()!;
-                        reader.Read();
-                        switch (propName)
-                        {
-                            case "Role":
-                                role = reader.GetString();
-                                break;
-                            case "Content":
-                                content = reader.GetString();
-                                break;
-                            default:
-                                reader.TrySkip();
-                                break;
-                        }
-                    }
-                }
-
-                return new ChatMessageData
-                {
-                    Role = role ?? "user",
-                    Content = content ?? "",
-                };
-            }
-
-            if (reader.TokenType == JsonTokenType.Null)
-                return null;
-
-            throw new JsonException($"Unexpected token {reader.TokenType} for ChatMessageData");
+            public string Version { get; set; } = "1.0";
+            public string TreeTitle { get; set; } = "新对话";
+            public DateTime CreatedTime { get; set; } = DateTime.Now;
+            public string SystemPrompt { get; set; } = "你是一个有帮助的AI助手。";
+            public ChatTreeNodeData RootNode { get; set; } = new();
         }
 
-        public override void Write(Utf8JsonWriter writer, ChatMessageData value, JsonSerializerOptions options)
+        private sealed class ChatTreeNodeData
         {
-            writer.WriteStartObject();
-            writer.WriteString("Role", value.Role);
-            writer.WriteString("Content", value.Content);
-            writer.WriteEndObject();
+            public int NodeId { get; set; }
+            public string? Name { get; set; }
+            public ChatMessageData? UserMessage { get; set; }
+            public ChatMessageData? ReplyMessage { get; set; }
+            public List<ChatTreeNodeData> ChildNodes { get; set; } = new();
+        }
+
+        private sealed class ChatMessageData
+        {
+            public string Role { get; set; } = "user";
+            public string Content { get; set; } = string.Empty;
+        }
+
+        /// <summary>
+        /// 向后兼容的 ChatMessageData JSON 转换器。
+        /// 支持两种格式：
+        ///   旧格式："消息内容" (string)
+        ///   新格式：{"Role": "user", "Content": "消息内容"} (object)
+        /// </summary>
+        private sealed class ChatMessageDataConverter : JsonConverter<ChatMessageData>
+        {
+            public override ChatMessageData? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                if (reader.TokenType == JsonTokenType.String)
+                {
+                    // 旧格式：纯字符串 → 包装为 ChatMessageData
+                    return new ChatMessageData { Role = "user", Content = reader.GetString() ?? "" };
+                }
+
+                if (reader.TokenType == JsonTokenType.StartObject)
+                {
+                    // 新格式：{Role, Content} 对象（手动解析，避免递归调用 JsonSerializer.Deserialize）
+                    string? role = null;
+                    string? content = null;
+
+                    while (reader.Read())
+                    {
+                        if (reader.TokenType == JsonTokenType.EndObject)
+                            break;
+
+                        if (reader.TokenType == JsonTokenType.PropertyName)
+                        {
+                            string propName = reader.GetString()!;
+                            reader.Read();
+                            switch (propName)
+                            {
+                                case "Role":
+                                    role = reader.GetString();
+                                    break;
+                                case "Content":
+                                    content = reader.GetString();
+                                    break;
+                                default:
+                                    reader.TrySkip();
+                                    break;
+                            }
+                        }
+                    }
+
+                    return new ChatMessageData
+                    {
+                        Role = role ?? "user",
+                        Content = content ?? "",
+                    };
+                }
+
+                if (reader.TokenType == JsonTokenType.Null)
+                    return null;
+
+                throw new JsonException($"Unexpected token {reader.TokenType} for ChatMessageData");
+            }
+
+            public override void Write(Utf8JsonWriter writer, ChatMessageData value, JsonSerializerOptions options)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("Role", value.Role);
+                writer.WriteString("Content", value.Content);
+                writer.WriteEndObject();
+            }
         }
     }
 }

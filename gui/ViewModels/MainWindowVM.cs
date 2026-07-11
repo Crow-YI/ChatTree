@@ -19,7 +19,7 @@ namespace TreeChat.ViewModels
     /// </summary>
     public class MainWindowVM : BaseViewModel
     {
-        private readonly IFileService _fileService;
+        private readonly FileService _fileService;
         private DispatcherTimer? _autoSaveTimer;
 
         /// <summary>
@@ -81,7 +81,7 @@ namespace TreeChat.ViewModels
         public Commands.RelayCommand ShowSettingsCommand { get; }
         public Commands.RelayCommand ToggleSidebarCommand { get; }
 
-        public MainWindowVM(IFileService fileService)
+        public MainWindowVM(FileService fileService)
         {
             _fileService = fileService;
 

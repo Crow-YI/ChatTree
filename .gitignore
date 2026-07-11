@@ -22,6 +22,8 @@ config.json
 # WPF build artifacts
 gui/bin/
 gui/obj/
+gui.tests/bin/
+gui.tests/obj/
 
 # 项目调整文档
 BackendStructure.md

@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
-using TreeChat.Models;
 using TreeChat.Services;
 using TreeChat.ViewModels;
 using TreeChat.Views;
@@ -46,7 +45,7 @@ internal static class Program
 
     private static void SidebarToggles()
     {
-        var vm = new MainWindowVM(new FakeFileService());
+        var vm = new MainWindowVM(new FileService());
         var changedProperties = new List<string?>();
         vm.PropertyChanged += (_, args) => changedProperties.Add(args.PropertyName);
 
@@ -150,15 +149,5 @@ internal static class Program
         {
             throw new InvalidOperationException(message);
         }
-    }
-
-    private sealed class FakeFileService : IFileService
-    {
-        public bool SaveChatTree(ChatTree chatTree) => true;
-        public bool SaveChatTreeAs(ChatTree chatTree) => true;
-        public Task<bool> SaveChatTreeAsync(ChatTree chatTree) => Task.FromResult(true);
-        public Task<bool> SaveChatTreeAsAsync(ChatTree chatTree) => Task.FromResult(true);
-        public ChatTree? LoadChatTree() => null;
-        public ChatTree? LoadChatTree(string filePath) => null;
     }
 }
