@@ -8,6 +8,6 @@
                               Padding="0"
                               IsToolBarVisible="False"
                               IsSelectionEnabled="True"
-                              VerticalScrollBarVisibility="Hidden"
+                              VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled"/>
 </UserControl>
