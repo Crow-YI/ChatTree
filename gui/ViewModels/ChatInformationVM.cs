@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -216,12 +217,37 @@ namespace TreeChat.ViewModels
         }
 
         /// <summary>
+        /// 支持的附件文件扩展名集合（不区分大小写）。
+        /// </summary>
+        private static readonly HashSet<string> SupportedAttachmentExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".txt", ".md", ".json", ".xml", ".yaml", ".yml", ".csv",
+            ".log", ".ini", ".cfg", ".env",
+            ".cs", ".py", ".js", ".ts", ".html", ".css", ".sql",
+            ".sh", ".bat", ".ps1", ".psm1",
+            ".java", ".cpp", ".c", ".h", ".hpp", ".rs", ".go", ".rb", ".php",
+            ".yaml", ".yml",
+            ".cfg", ".conf",
+        };
+
+        /// <summary>
         /// 读取指定文件列表并添加到附件（供按钮点击和拖放共用）。
+        /// 会检查文件扩展名，非支持的文本文件将被拒绝并提示。
         /// </summary>
         private void ExecuteAddAttachmentFiles(string[] filePaths)
         {
+            var rejected = new List<string>();
+
             foreach (var filePath in filePaths)
             {
+                var ext = Path.GetExtension(filePath);
+                if (!SupportedAttachmentExtensions.Contains(ext))
+                {
+                    rejected.Add(Path.GetFileName(filePath));
+                    AppLogger.Warn("Attachment rejected (unsupported type): {File}", Path.GetFileName(filePath));
+                    continue;
+                }
+
                 try
                 {
                     var content = File.ReadAllText(filePath);
@@ -236,6 +262,15 @@ namespace TreeChat.ViewModels
                     AppLogger.Warn(ex, "Failed to read attachment: {Path}", filePath);
                 }
             }
+
+            // 统一提示被拒绝的文件（避免在拖放事件中逐条弹框导致卡死）
+            if (rejected.Count > 0)
+            {
+                var msg = string.Join("\n", rejected.Select(f => $"  • {f}"));
+                MessageBox.Show($"以下文件类型不支持，已忽略：\n{msg}\n\n支持的格式：文本文件、代码文件等",
+                    "附件格式不支持", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+
             HasAttachments = Attachments.Count > 0;
             SendMessage.OnCanExecuteChanged();
         }
