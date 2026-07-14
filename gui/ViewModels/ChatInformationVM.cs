@@ -174,6 +174,10 @@ namespace TreeChat.ViewModels
                 canExecute: CanExecuteSendMessage);
 
             AddAttachmentCommand = new RelayCommand(_ => ExecuteAddAttachment());
+            AddAttachmentFilesCommand = new RelayCommand(param =>
+            {
+                if (param is string[] files) ExecuteAddAttachmentFiles(files);
+            });
             RemoveAttachmentCommand = new RelayCommand(param =>
             {
                 if (param is AttachmentItem item) ExecuteRemoveAttachment(item);
@@ -191,6 +195,11 @@ namespace TreeChat.ViewModels
         // ==================== 附件操作 ====================
 
         /// <summary>
+        /// 添加附件命令（供拖放传入文件路径数组使用）。
+        /// </summary>
+        public RelayCommand AddAttachmentFilesCommand { get; }
+
+        /// <summary>
         /// 打开文件选择器添加附件。支持常见文本和代码文件。
         /// </summary>
         private void ExecuteAddAttachment()
@@ -203,26 +212,32 @@ namespace TreeChat.ViewModels
             };
 
             if (dialog.ShowDialog() == true)
+                ExecuteAddAttachmentFiles(dialog.FileNames);
+        }
+
+        /// <summary>
+        /// 读取指定文件列表并添加到附件（供按钮点击和拖放共用）。
+        /// </summary>
+        private void ExecuteAddAttachmentFiles(string[] filePaths)
+        {
+            foreach (var filePath in filePaths)
             {
-                foreach (var filePath in dialog.FileNames)
+                try
                 {
-                    try
+                    var content = File.ReadAllText(filePath);
+                    Attachments.Add(new AttachmentItem
                     {
-                        var content = File.ReadAllText(filePath);
-                        Attachments.Add(new AttachmentItem
-                        {
-                            FileName = Path.GetFileName(filePath),
-                            Content = content,
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        AppLogger.Warn(ex, "Failed to read attachment: {Path}", filePath);
-                    }
+                        FileName = Path.GetFileName(filePath),
+                        Content = content,
+                    });
                 }
-                HasAttachments = Attachments.Count > 0;
-                SendMessage.OnCanExecuteChanged();
+                catch (Exception ex)
+                {
+                    AppLogger.Warn(ex, "Failed to read attachment: {Path}", filePath);
+                }
             }
+            HasAttachments = Attachments.Count > 0;
+            SendMessage.OnCanExecuteChanged();
         }
 
         /// <summary>

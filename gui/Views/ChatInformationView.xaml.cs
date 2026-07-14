@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using TreeChat.ViewModels;
@@ -33,5 +34,29 @@ public partial class ChatInformationView : UserControl
         {
             vm.SendMessage.Execute(null);
         }
+    }
+
+    // ==================== 附件拖放 ====================
+
+    private void InputArea_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            e.Effects = DragDropEffects.Copy;
+        else
+            e.Effects = DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void InputArea_PreviewDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            if (files.Length > 0 && DataContext is ChatInformationVM vm)
+            {
+                vm.AddAttachmentFilesCommand.Execute(files);
+            }
+        }
+        e.Handled = true;
     }
 }

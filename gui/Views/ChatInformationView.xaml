@@ -97,7 +97,10 @@
         <Border Grid.Row="1" Background="{StaticResource SubtleBackground}"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12">
             <Border Background="{StaticResource CardBackground}" BorderBrush="{StaticResource BorderBrush}"
-                    BorderThickness="1" CornerRadius="6" Padding="8">
+                    BorderThickness="1" CornerRadius="6" Padding="8"
+                    AllowDrop="True"
+                    PreviewDragOver="InputArea_PreviewDragOver"
+                    PreviewDrop="InputArea_PreviewDrop">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
