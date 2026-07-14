@@ -2,7 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:TreeChat.ViewModels"
-             xmlns:nodify="clr-namespace:Nodify;assembly=Nodify">
+             xmlns:nodify="clr-namespace:Nodify;assembly=Nodify"
+             Loaded="TreeVisualizationView_Loaded">
     <Grid Background="{StaticResource CardBackground}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -116,7 +117,63 @@
                     </Grid>
                 </StackPanel>
 
-                <!-- 右侧留空 -->
+                <!-- 右侧：缩放控制 -->
+                <StackPanel Grid.Column="1"
+                            HorizontalAlignment="Right"
+                            Orientation="Horizontal"
+                            Margin="0,0,4,0">
+                    <Button x:Name="ZoomOutBtn"
+                            Content="−"
+                            ToolTip="缩小 (Ctrl+滚轮)"
+                            Width="28" Height="24"
+                            FontSize="14" FontWeight="Bold"
+                            Padding="0"
+                            Background="{StaticResource CardBackground}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            Cursor="Hand"
+                            Click="ZoomOut_Click"/>
+
+                    <Border Background="{StaticResource CardBackground}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            MinWidth="48" Height="24"
+                            Margin="4,0"
+                            Padding="4,0"
+                            CornerRadius="2">
+                        <TextBlock x:Name="ZoomLevelText"
+                                   Text="100%"
+                                   FontSize="11"
+                                   TextAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontFamily="Consolas"/>
+                    </Border>
+
+                    <Button x:Name="ZoomInBtn"
+                            Content="+"
+                            ToolTip="放大 (Ctrl+滚轮)"
+                            Width="28" Height="24"
+                            FontSize="14" FontWeight="Bold"
+                            Padding="0"
+                            Background="{StaticResource CardBackground}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            Cursor="Hand"
+                            Click="ZoomIn_Click"/>
+
+                    <Button x:Name="ZoomResetBtn"
+                            Content="1:1"
+                            ToolTip="重置缩放"
+                            Width="36" Height="24"
+                            Margin="4,0,0,0"
+                            FontSize="11"
+                            Padding="0"
+                            Background="{StaticResource CardBackground}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            Cursor="Hand"
+                            Click="ZoomReset_Click"/>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -128,6 +185,9 @@
                              SelectedItems="{Binding SelectedItems}"
                              CanSelectMultipleItems="False"
                              AllowDrop="True"
+                             MinViewportZoom="0.2"
+                             MaxViewportZoom="3.0"
+                             ViewportUpdated="Editor_ViewportUpdated"
                              PreviewMouseLeftButtonDown="Editor_PreviewMouseLeftButtonDown"
                              PreviewMouseMove="Editor_PreviewMouseMove"
                              PreviewMouseLeftButtonUp="Editor_PreviewMouseLeftButtonUp"
@@ -149,7 +209,12 @@
                             Cursor="Hand"
                             MinWidth="52"
                             MinHeight="32"
-                            Padding="10,6">
+                            Padding="10,6"
+                            RenderTransformOrigin="0,0">
+                        <Border.RenderTransform>
+                            <ScaleTransform ScaleX="{Binding ViewportZoom, RelativeSource={RelativeSource AncestorType=nodify:NodifyEditor}}"
+                                            ScaleY="{Binding ViewportZoom, RelativeSource={RelativeSource AncestorType=nodify:NodifyEditor}}"/>
+                        </Border.RenderTransform>
                         <Border.InputBindings>
                             <MouseBinding Gesture="LeftClick"
                                           Command="{Binding DataContext.SelectNodeCommand, RelativeSource={RelativeSource AncestorType=nodify:NodifyEditor}}"

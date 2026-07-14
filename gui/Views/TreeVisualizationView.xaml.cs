@@ -37,6 +37,61 @@ namespace TreeChat.Views
             };
         }
 
+        // ==================== 缩放控制 ====================
+
+        /// <summary>
+        /// 控件加载完成后初始化缩放设置。
+        /// </summary>
+        private void TreeVisualizationView_Loaded(object sender, RoutedEventArgs e)
+        {
+            editor.MinViewportZoom = 0.2;
+            editor.MaxViewportZoom = 3.0;
+            UpdateZoomDisplay();
+        }
+
+        /// <summary>
+        /// 更新缩放百分比显示。
+        /// </summary>
+        private void UpdateZoomDisplay()
+        {
+            int percent = (int)Math.Round(editor.ViewportZoom * 100);
+            ZoomLevelText.Text = $"{percent}%";
+        }
+
+        /// <summary>
+        /// 视口变化时更新缩放显示。
+        /// </summary>
+        private void Editor_ViewportUpdated(object sender, EventArgs e)
+        {
+            UpdateZoomDisplay();
+        }
+
+        /// <summary>
+        /// 放大（步进 1.3x）。
+        /// </summary>
+        private void ZoomIn_Click(object sender, RoutedEventArgs e)
+        {
+            double newZoom = Math.Min(editor.ViewportZoom * 1.3, editor.MaxViewportZoom);
+            editor.ViewportZoom = newZoom;
+        }
+
+        /// <summary>
+        /// 缩小（步进 1.3x）。
+        /// </summary>
+        private void ZoomOut_Click(object sender, RoutedEventArgs e)
+        {
+            double newZoom = Math.Max(editor.ViewportZoom / 1.3, editor.MinViewportZoom);
+            editor.ViewportZoom = newZoom;
+        }
+
+        /// <summary>
+        /// 重置缩放为 1.0。
+        /// </summary>
+        private void ZoomReset_Click(object sender, RoutedEventArgs e)
+        {
+            editor.ViewportZoom = 1.0;
+        }
+
         /// <summary>
         /// 树渲染完成后自动适配视图，使所有节点居中可见。
         /// </summary>
@@ -49,6 +104,9 @@ namespace TreeChat.Views
                 // 禁用 Nodify 默认中键/右键平移和边缘滚动
                 editor.DisablePanning = true;
                 editor.DisableAutoPanning = true;
+
+                // 初始视图重置缩放为 1.0，确保居中计算一致性
+                editor.ViewportZoom = 1.0;
 
                 // 计算所有节点的包围盒
                 double minX = double.MaxValue, minY = double.MaxValue;
@@ -108,9 +166,11 @@ namespace TreeChat.Views
 
             if (_isPanning)
             {
+                // delta 是屏幕像素，ViewportLocation 是图空间坐标，需除以缩放比
+                double zoom = editor.ViewportZoom;
                 editor.ViewportLocation = new Point(
-                    _panStartViewport.X - delta.X,
-                    _panStartViewport.Y - delta.Y);
+                    _panStartViewport.X - delta.X / zoom,
+                    _panStartViewport.Y - delta.Y / zoom);
             }
         }
 

@@ -10,9 +10,9 @@ namespace TreeChat.ViewModels
     /// </summary>
     public class TreeNodeVM : BaseViewModel
     {
-        //绘图属性
-        public const double WIDTH = 40;
-        public const double HEIGHT = 30;
+        //绘图属性（与 DecoratorTemplate MinWidth/MinHeight 对齐）
+        public const double WIDTH = 52;
+        public const double HEIGHT = 32;
 
         private double _x;
         public double X
