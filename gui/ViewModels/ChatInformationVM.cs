@@ -1,5 +1,9 @@
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Windows;
+using Microsoft.Win32;
 using TreeChat.Commands;
 using TreeChat.Infrastructure;
 using TreeChat.Models;
@@ -79,6 +83,43 @@ namespace TreeChat.ViewModels
 
         public AsyncRelayCommand SendMessage { get; }
 
+        private List<string>? _attachmentFileNames;
+        /// <summary>
+        /// 当前选中节点的附件文件名列表（用于 UI 展示）
+        /// </summary>
+        public List<string>? AttachmentFileNames
+        {
+            get => _attachmentFileNames;
+            set => SetProperty(ref _attachmentFileNames, value);
+        }
+
+        // ==================== 附件 ====================
+
+        /// <summary>
+        /// 已添加的附件列表
+        /// </summary>
+        public ObservableCollection<AttachmentItem> Attachments { get; } = new();
+
+        private bool _hasAttachments;
+        /// <summary>
+        /// 是否有附件（控制 UI 可见性）
+        /// </summary>
+        public bool HasAttachments
+        {
+            get => _hasAttachments;
+            set => SetProperty(ref _hasAttachments, value);
+        }
+
+        /// <summary>
+        /// 添加附件命令
+        /// </summary>
+        public RelayCommand AddAttachmentCommand { get; }
+
+        /// <summary>
+        /// 移除附件命令
+        /// </summary>
+        public RelayCommand RemoveAttachmentCommand { get; }
+
         private TreeNodeVM? _selectedNode;
         public TreeNodeVM? SelectedNode
         {
@@ -97,12 +138,16 @@ namespace TreeChat.ViewModels
                         SystemPrompt = CurrentChatTree?.SystemPrompt ?? "";
                         UserMessage = null;
                         AIReply = null;
+                        AttachmentFileNames = null;
                     }
                     else
                     {
                         // 非根节点：显示 Q&A
                         UserMessage = value.Node.UserMessage;
                         AIReply = value.Node.ReplyMessage;
+                        AttachmentFileNames = value.Node.AttachmentFileNames.Count > 0
+                            ? value.Node.AttachmentFileNames.ToList()
+                            : null;
                     }
                 }
                 SendMessage.OnCanExecuteChanged();
@@ -127,26 +172,86 @@ namespace TreeChat.ViewModels
             SendMessage = new AsyncRelayCommand(
                 execute: ExecuteSendMessageAsync,
                 canExecute: CanExecuteSendMessage);
+
+            AddAttachmentCommand = new RelayCommand(_ => ExecuteAddAttachment());
+            RemoveAttachmentCommand = new RelayCommand(param =>
+            {
+                if (param is AttachmentItem item) ExecuteRemoveAttachment(item);
+            });
         }
 
         private bool CanExecuteSendMessage(object? parameter)
         {
             return !IsStreaming
-                && !string.IsNullOrEmpty(InputMessage)
                 && SelectedNode != null
-                && CurrentChatTree != null;
+                && CurrentChatTree != null
+                && (!string.IsNullOrEmpty(InputMessage) || Attachments.Count > 0);
+        }
+
+        // ==================== 附件操作 ====================
+
+        /// <summary>
+        /// 打开文件选择器添加附件。支持常见文本和代码文件。
+        /// </summary>
+        private void ExecuteAddAttachment()
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "支持的文本文件 (*.txt;*.md;*.json;*.xml;*.yaml;*.yml;*.csv;*.log;*.ini;*.cfg;*.cs;*.py;*.js;*.ts;*.html;*.css;*.sql;*.sh;*.bat;*.ps1)|*.txt;*.md;*.json;*.xml;*.yaml;*.yml;*.csv;*.log;*.ini;*.cfg;*.cs;*.py;*.js;*.ts;*.html;*.css;*.sql;*.sh;*.bat;*.ps1|所有文件 (*.*)|*.*",
+                Title = "添加附件",
+                Multiselect = true,
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                foreach (var filePath in dialog.FileNames)
+                {
+                    try
+                    {
+                        var content = File.ReadAllText(filePath);
+                        Attachments.Add(new AttachmentItem
+                        {
+                            FileName = Path.GetFileName(filePath),
+                            Content = content,
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warn(ex, "Failed to read attachment: {Path}", filePath);
+                    }
+                }
+                HasAttachments = Attachments.Count > 0;
+                SendMessage.OnCanExecuteChanged();
+            }
+        }
+
+        /// <summary>
+        /// 移除指定附件。
+        /// </summary>
+        private void ExecuteRemoveAttachment(AttachmentItem item)
+        {
+            Attachments.Remove(item);
+            HasAttachments = Attachments.Count > 0;
+            SendMessage.OnCanExecuteChanged();
         }
 
         private async Task ExecuteSendMessageAsync(object? parameter)
         {
-            if (string.IsNullOrWhiteSpace(InputMessage) || SelectedNode == null || CurrentChatTree == null) return;
+            if (SelectedNode == null || CurrentChatTree == null) return;
 
             TreeNodeVM previousSelected = SelectedNode;
             TreeNodeVM? newNodeVM = null;
 
-            // 在循环外保存用户消息，避免 InputMessage 清空后重试时丢失
-            var userMessage = InputMessage;
-            if (string.IsNullOrWhiteSpace(userMessage)) return;
+            // 在循环外保存用户消息和附件，避免清空后重试时丢失
+            var userMessage = InputMessage ?? "";
+            if (string.IsNullOrWhiteSpace(userMessage) && Attachments.Count == 0) return;
+            var pendingAttachments = Attachments.ToList();
+            Attachments.Clear();
+            HasAttachments = false;
+            SendMessage.OnCanExecuteChanged();
+
+            AppLogger.Info("Chat sending: attachments={Count} textLen={Len}",
+                pendingAttachments.Count, userMessage.Length);
 
             // 最多尝试 2 次（含首次 + 一次自动重试）
             for (int attempt = 1; attempt <= 2; attempt++)
@@ -158,7 +263,9 @@ namespace TreeChat.ViewModels
                 {
                     // 乐观 UI 更新：先创建本地临时节点（使用树内计数器获取 ID）
                     int newNodeId = CurrentChatTree!.GetNextNodeId();
-                    ChatTreeNode newNode = new ChatTreeNode(SelectedNode.Node, userMessage, newNodeId);
+                    ChatTreeNode newNode = new ChatTreeNode(
+                        SelectedNode.Node, userMessage, newNodeId,
+                        attachmentFileNames: pendingAttachments.Select(a => a.FileName).ToList());
                     newNodeVM = SelectedNode.AddChild(newNode);
                     CurrentChatTree.IsModified = true;  // 标记未保存更改
                     if (attempt == 1)
@@ -184,14 +291,20 @@ namespace TreeChat.ViewModels
                     string treeId = CurrentChatTree.TreeId!;
 
                     string fullContent = "";
+                    AppLogger.Info("Chat requesting SSE stream: tree={TreeId}", treeId);
                     // 在后台线程上消费 SSE 流，避免阻塞 UI 线程渲染
                     var sseEvents = backend.ChatStreamAsync(
                         treeId, previousSelected.Node.NodeID, userMessage,
-                        profileName: ApiConfig.ActiveProfileName);
+                        profileName: ApiConfig.ActiveProfileName,
+                        attachments: pendingAttachments);
                     await Task.Run(async () =>
                     {
+                        AppLogger.Info("Chat SSE stream started");
+                        int eventCount = 0;
                         await foreach (var sseEvent in sseEvents)
                         {
+                            eventCount++;
+                            AppLogger.Debug("Chat SSE event #{Count}: type={Type}", eventCount, sseEvent.EventType);
                             switch (sseEvent.EventType)
                             {
                                 case "created":

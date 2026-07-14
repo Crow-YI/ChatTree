@@ -26,7 +26,7 @@ from ..core.errors import (
 from ..services.tree_manager import TreeManager
 from ..services.llm_service import LLMService
 from ..services.file_service import FileService
-from ..models.chat_message import BaseMessage, SystemMessage, message_to_role
+from ..models.chat_message import BaseMessage, HumanMessage, SystemMessage, message_to_role
 from .dependencies import get_tree_manager, get_llm_service, get_file_service
 from .schemas import (
     CreateTreeRequest,
@@ -201,9 +201,18 @@ async def chat(
     llm: LLMService = Depends(get_llm_service),
 ) -> EventSourceResponse:
     """SSE 流式聊天端点。"""
-    # 1. 在指定父节点下创建子节点
+    logger.info("Chat request: tree=%s msg_len=%d attachments=%d files=%s",
+                tree_id, len(req.message),
+                len(req.attachments) if req.attachments else 0,
+                [a.file_name for a in req.attachments] if req.attachments else [])
+
+    # 1. 在指定父节点下创建子节点，传入附件文件名
     try:
-        child_node, parent_node = tm.add_child_node(tree_id, req.parent_node_id, req.message)
+        file_names = [att.file_name for att in req.attachments] if req.attachments else None
+        child_node, parent_node = tm.add_child_node(
+            tree_id, req.parent_node_id, req.message,
+            attachment_file_names=file_names,
+        )
     except (TreeNotFoundError, NodeNotFoundError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -212,6 +221,15 @@ async def chat(
     context_messages: list[BaseMessage] = child_node.get_full_context()
     if tree.system_prompt:
         context_messages.insert(0, SystemMessage(content=tree.system_prompt))
+
+    # 2b. 注入附件内容（作为额外的用户消息放在当前消息之前）
+    if req.attachments:
+        for att in req.attachments:
+            file_msg = (
+                f"用户上传了文件「{att.file_name}」，以下是文件内容：\n\n"
+                f"```\n{att.content}\n```"
+            )
+            context_messages.append(HumanMessage(content=file_msg))
 
     # 3. SSE 事件生成器
     async def event_generator() -> AsyncGenerator[dict[str, str], None]:
@@ -227,6 +245,7 @@ async def chat(
                     "role": message_to_role(child_node.user_message),
                     "content": child_node.user_message.content,
                 },
+                "attachment_file_names": child_node.attachment_file_names,
             }, ensure_ascii=False)
             yield {"event": "created", "data": created_data}
 

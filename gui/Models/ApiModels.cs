@@ -71,6 +71,10 @@ namespace TreeChat.Models
 
         [JsonPropertyName("children")]
         public List<TreeNodeData> Children { get; set; } = new();
+
+        [JsonPropertyName("attachment_file_names")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? AttachmentFileNames { get; set; }
     }
 
     public class TreeDetailResponse
@@ -89,6 +93,17 @@ namespace TreeChat.Models
 
         [JsonPropertyName("root_node")]
         public TreeNodeData? RootNode { get; set; }
+    }
+
+    // === Attachment ===
+
+    public class AttachmentItem
+    {
+        [JsonPropertyName("file_name")]
+        public string FileName { get; set; } = "";
+
+        [JsonPropertyName("content")]
+        public string Content { get; set; } = "";
     }
 
     // === Chat ===
@@ -120,6 +135,10 @@ namespace TreeChat.Models
         [JsonPropertyName("max_tokens")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? MaxTokens { get; set; }
+
+        [JsonPropertyName("attachments")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<AttachmentItem>? Attachments { get; set; }
     }
 
     // === SSE Events ===
@@ -131,6 +150,10 @@ namespace TreeChat.Models
 
         [JsonPropertyName("user_message")]
         public NodeMessage? UserMessage { get; set; }
+
+        [JsonPropertyName("attachment_file_names")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? AttachmentFileNames { get; set; }
     }
 
     public class SseDeltaEvent

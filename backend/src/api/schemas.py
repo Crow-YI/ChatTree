@@ -51,6 +51,7 @@ class TreeNodeData(BaseModel):
     user_message: NodeMessage
     reply_message: NodeMessage | None = None
     children: list[TreeNodeData] = []
+    attachment_file_names: list[str] = []
 
 
 class TreeDetailResponse(BaseModel):
@@ -63,6 +64,12 @@ class TreeDetailResponse(BaseModel):
 
 # === Chat ===
 
+class AttachmentData(BaseModel):
+    """上传的附件文件数据（文件名 + 文本内容）。"""
+    file_name: str
+    content: str
+
+
 class ChatRequest(BaseModel):
     parent_node_id: int
     message: str = Field(..., min_length=1)
@@ -71,6 +78,7 @@ class ChatRequest(BaseModel):
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
     max_tokens: int | None = Field(default=None, ge=1, le=8192)
+    attachments: list[AttachmentData] | None = None  # 上传的附件列表
 
 
 # === Node Operations ===
@@ -163,4 +171,5 @@ def _node_to_data(node: ChatTreeNode) -> TreeNodeData:
             else None
         ),
         children=[_node_to_data(c) for c in node.children],
+        attachment_file_names=node.attachment_file_names,
     )

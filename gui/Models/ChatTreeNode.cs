@@ -1,7 +1,7 @@
 namespace TreeChat.Models
 {
     /// <summary>
-    /// 聊天树节点，包含用户消息、AI回复、父节点和子节点等信息
+    /// 聊天树节点，包含用户消息、AI回复、附件文件名、父节点和子节点等信息
     /// </summary>
     public class ChatTreeNode
     {
@@ -11,15 +11,19 @@ namespace TreeChat.Models
         public string? ReplyMessage { get; private set; }
         public int NodeID { get; }
         public string? Name { get; set; }
+        public List<string> AttachmentFileNames { get; set; } = new();
 
         /// <summary>
         /// 用于创建节点的构造函数，需传入明确 NodeID（不再使用全局 static 计数器）
         /// </summary>
-        public ChatTreeNode(ChatTreeNode? parentNode, string userMessage, int nodeId)
+        public ChatTreeNode(ChatTreeNode? parentNode, string userMessage, int nodeId,
+                            List<string>? attachmentFileNames = null)
         {
             ParentNode = parentNode;
             UserMessage = userMessage;
             NodeID = nodeId;
+            if (attachmentFileNames != null)
+                AttachmentFileNames = attachmentFileNames;
         }
 
         /// <summary>

@@ -430,6 +430,7 @@ namespace TreeChat.Services
             string treeId, int parentNodeId, string message,
             ChatConfigData? config = null,
             string? profileName = null,
+            List<AttachmentItem>? attachments = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             var requestBody = new ChatRequest
@@ -437,6 +438,7 @@ namespace TreeChat.Services
                 ParentNodeId = parentNodeId,
                 Message = message,
                 ProfileName = profileName,
+                Attachments = attachments,
             };
 
             if (config != null)
@@ -447,7 +449,15 @@ namespace TreeChat.Services
                 requestBody.MaxTokens = config.MaxTokens;
             }
 
-            AppLogger.Info("ChatStream start: tree={TreeId} parent={ParentId}", treeId, parentNodeId);
+            if (attachments != null && attachments.Count > 0)
+            {
+                AppLogger.Info("ChatStream start: tree={TreeId} parent={ParentId} attachments={Count}",
+                    treeId, parentNodeId, attachments.Count);
+            }
+            else
+            {
+                AppLogger.Info("ChatStream start: tree={TreeId} parent={ParentId}", treeId, parentNodeId);
+            }
 
             var json = JsonSerializer.Serialize(requestBody, _jsonOptions);
             var request = new HttpRequestMessage(HttpMethod.Post,

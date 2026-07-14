@@ -22,6 +22,7 @@ class ChatTreeNode(BaseModel):
     reply_message: AIMessage | None = None
     name: str | None = None
     children: list[ChatTreeNode] = []
+    attachment_file_names: list[str] = []
 
     # 不参与序列化，仅用于 get_full_context 追踪父节点
     _parent: ChatTreeNode | None = None

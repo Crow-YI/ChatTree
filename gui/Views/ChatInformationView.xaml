@@ -55,7 +55,34 @@
                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="2,0,0,6"/>
                         <Border Background="{StaticResource SubtleBackground}" BorderBrush="{StaticResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="5" Padding="12,10" Margin="0,0,0,18">
-                            <TextBlock Text="{Binding UserMessage}" TextWrapping="Wrap" FontSize="14" LineHeight="21"/>
+                            <StackPanel>
+                                <TextBlock Text="{Binding UserMessage}" TextWrapping="Wrap" FontSize="14" LineHeight="21"/>
+                                <ItemsControl ItemsSource="{Binding AttachmentFileNames}"
+                                              Margin="0,8,0,0">
+                                    <ItemsControl.Style>
+                                        <Style TargetType="ItemsControl">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="HasItems" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ItemsControl.Style>
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#E8E8E8" CornerRadius="3" Padding="6,2" Margin="0,0,4,2">
+                                                <TextBlock Text="{Binding}" FontSize="11" Foreground="#666666"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </Border>
 
                         <TextBlock Text="AI 回答" FontSize="11" FontWeight="SemiBold"
@@ -72,11 +99,68 @@
             <Border Background="{StaticResource CardBackground}" BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="1" CornerRadius="6" Padding="8">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="28"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 附件 chips 行 -->
+                    <ItemsControl Grid.Row="0" ItemsSource="{Binding Attachments}"
+                                  Margin="0,0,0,6">
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasAttachments}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource SubtleBackground}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="3"
+                                        Padding="6,3" Margin="0,0,4,4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding FileName}"
+                                                   FontSize="11" VerticalAlignment="Center"
+                                                   Margin="0,0,6,0"/>
+                                        <Button Grid.Column="1"
+                                                Command="{Binding DataContext.RemoveAttachmentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                Background="Transparent" BorderBrush="Transparent"
+                                                BorderThickness="0" Padding="0"
+                                                Width="16" Height="16"
+                                                ToolTip="移除附件"
+                                                FontSize="11"
+                                                Content="✕"
+                                                Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- 输入栏行 -->
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="28"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <Viewbox Grid.Column="0" Width="18" Height="18" VerticalAlignment="Bottom" Margin="0,0,8,9"
                                  ToolTip="消息输入" IsHitTestVisible="False">
                             <Path Data="M3,3.5 H17 V13.5 H8 L4,17 V13.5 H3 Z M6,7 H14 M6,10 H12"
@@ -89,9 +173,18 @@
                                  Background="Transparent" TextWrapping="Wrap" AcceptsReturn="True"
                                  VerticalScrollBarVisibility="Auto"
                                  PreviewKeyDown="InputTextBox_PreviewKeyDown"/>
-                        <Button Grid.Column="2" Command="{Binding SendMessage}"
+                        <Button Grid.Column="2" Command="{Binding AddAttachmentCommand}"
+                                ToolTip="添加附件" Style="{StaticResource IconButtonStyle}"
+                                VerticalAlignment="Bottom" Margin="0,0,4,0" Width="34" Height="34">
+                            <Viewbox Width="16" Height="16">
+                                <Path Data="M16.5,6 V17.5 A3,3 0,0,1 13.5,20.5 H4.5 A3,3 0,0,1 1.5,17.5 V5.25 A2.25,2.25 0,0,1 3.75,3 H7.5 L9,4.5 H14.25 A2.25,2.25 0,0,1 16.5,6.75 V6 Z M8.5,11 H12.5 M10.5,9 V13"
+                                      Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.5"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            </Viewbox>
+                        </Button>
+                        <Button Grid.Column="3" Command="{Binding SendMessage}"
                                 ToolTip="发送消息" Style="{StaticResource PrimaryIconButtonStyle}"
-                                VerticalAlignment="Bottom" Margin="8,0,0,0">
+                                VerticalAlignment="Bottom">
                             <Viewbox Width="16" Height="16">
                                 <Path Data="M10,17 V3 M4.5,8.5 L10,3 L15.5,8.5"
                                       Stroke="White" StrokeThickness="1.8"
@@ -99,7 +192,8 @@
                             </Viewbox>
                         </Button>
                     </Grid>
-                </Border>
+                </Grid>
+            </Border>
         </Border>
     </Grid>
 </UserControl>

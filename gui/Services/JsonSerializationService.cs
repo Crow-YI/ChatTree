@@ -84,6 +84,9 @@ namespace TreeChat.Services
                     ? new ChatMessageData { Role = "assistant", Content = node.ReplyMessage }
                     : null,
                 ChildNodes = node.ChildNodes.Select(MapNodeToData).ToList(),
+                AttachmentFileNames = node.AttachmentFileNames.Count > 0
+                    ? node.AttachmentFileNames.ToList()
+                    : null,
             };
         }
 
@@ -109,6 +112,9 @@ namespace TreeChat.Services
 
             if (data.ReplyMessage?.Content != null)
                 node.SetAiReply(data.ReplyMessage.Content);
+
+            if (data.AttachmentFileNames != null && data.AttachmentFileNames.Count > 0)
+                node.AttachmentFileNames = data.AttachmentFileNames.ToList();
 
             foreach (var child in data.ChildNodes)
             {
@@ -152,6 +158,7 @@ namespace TreeChat.Services
             public ChatMessageData? UserMessage { get; set; }
             public ChatMessageData? ReplyMessage { get; set; }
             public List<ChatTreeNodeData> ChildNodes { get; set; } = new();
+            public List<string>? AttachmentFileNames { get; set; }
         }
 
         private sealed class ChatMessageData

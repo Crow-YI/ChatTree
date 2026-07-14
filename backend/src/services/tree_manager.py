@@ -73,7 +73,8 @@ class TreeManager:
         return node
 
     def add_child_node(
-        self, tree_id: str, parent_node_id: int, message: str
+        self, tree_id: str, parent_node_id: int, message: str,
+        attachment_file_names: list[str] | None = None,
     ) -> tuple[ChatTreeNode, ChatTreeNode]:
         """在指定父节点下创建子节点，返回 (新子节点, 父节点)。"""
         parent = self.get_node(tree_id, parent_node_id)
@@ -82,6 +83,7 @@ class TreeManager:
         child = ChatTreeNode(
             node_id=new_id,
             user_message=HumanMessage(content=message),
+            attachment_file_names=attachment_file_names or [],
         )
         parent.add_child(child)
         logger.info(
